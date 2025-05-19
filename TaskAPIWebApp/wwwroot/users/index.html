@@ -1,0 +1,392 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування Користувачами</title>
+    <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo"><a href="/index.html">TaskSystem</a></div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                   
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+
+    <div class="container">
+        <h1>Керування Користувачами</h1>
+        <div id="messageContainer"></div> <form id="userForm">
+            <h3>Додати нового користувача</h3>
+            <div>
+                <label for="username">Ім'я користувача:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            <button type="submit">Додати Користувача</button>
+        </form>
+
+        <div id="editUserFormContainer" class="hidden">
+            <h3>Редагувати ім'я користувача</h3>
+            <form id="editUserForm">
+                <input type="hidden" id="editUserId">
+                <div>
+                    <label for="editUsername">Нове ім'я користувача:</label>
+                    <input type="text" id="editUsername" name="username" required>
+                </div>
+                <button type="submit">Зберегти Ім'я</button>
+                <button type="button" id="cancelUserEditBtn" class="cancel-btn">Скасувати</button>
+            </form>
+        </div>
+
+        <h3>Список Користувачів</h3>
+        <div class="filter-container" style="margin-bottom: 1rem;">
+            <label for="userSearchInput">Пошук за ім'ям:</label>
+            <input type="text" id="userSearchInput" placeholder="Введіть ім'я для пошуку" style="min-width: 200px;">
+            <button id="applyUserSearchBtn" type="button" style="margin-left:10px;">Пошук</button>
+            <button id="clearUserSearchBtn" type="button" class="cancel-btn">Очистити</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Ім'я користувача</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody id="usersTableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+        // --- ПОЧАТОК КОДУ, ЯКИЙ МАВ БУТИ У common.js (ТЕПЕР НА КОЖНІЙ СТОРІНЦІ) ---
+
+        /**
+         * Відображає повідомлення для користувача.
+         * @param {string} containerId - ID HTML-елемента, де буде відображено повідомлення.
+         * @param {string} text - Текст повідомлення.
+         * @param {string} type - Тип повідомлення ('success', 'error', 'info').
+         */
+        function showMessage(containerId, text, type = 'success') {
+            const messageContainerEl = document.getElementById(containerId); // Змінив ім'я змінної, щоб не було конфлікту з глобальною messageContainer
+            if (!messageContainerEl) {
+                console.error(`Message container with id '${containerId}' not found.`);
+                return;
+            }
+            messageContainerEl.innerHTML = '';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = text;
+            messageContainerEl.appendChild(messageDiv);
+            setTimeout(() => {
+                if (messageDiv.parentNode === messageContainerEl) {
+                    messageContainerEl.innerHTML = '';
+                }
+            }, 4000);
+        }
+
+        /**
+         * Екранує спеціальні HTML-символи для безпечного відображення тексту.
+         * @param {string | number | null | undefined} unsafe - Текст для екранування.
+         * @returns {string} Екранований текст.
+         */
+        function escapeHtml(unsafe) {
+            if (unsafe === null || typeof unsafe === 'undefined') {
+                return '';
+            }
+            return unsafe.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        /**
+         * Обробляє помилкову відповідь від API та повертає текст помилки.
+         * @param {Response} response - Об'єкт Response від fetch.
+         * @returns {Promise<string>} Текст помилки.
+         */
+        async function handleApiResponseError(response) {
+            let errorMessage = `Помилка ${response.status}: ${response.statusText || 'Невідома помилка сервера'}`;
+            try {
+                const errorData = await response.json();
+                if (errorData) {
+                    if (errorData.message) {
+                        errorMessage = errorData.message;
+                    } else if (errorData.title && errorData.errors) {
+                        const errorDetails = Object.values(errorData.errors).flat().join('; ');
+                        errorMessage = `${errorData.title}${errorDetails ? ': ' + errorDetails : ''}`;
+                    } else if (typeof errorData === 'string' && errorData.length > 0 && errorData.length < 500) {
+                        errorMessage = errorData;
+                    } else if (response.status === 400 && errorData.errors) {
+                        const errorDetails = Object.keys(errorData.errors)
+                            .map(key => `${key}: ${errorData.errors[key].join(', ')}`)
+                            .join('; ');
+                        errorMessage = `Помилка валідації: ${errorDetails}`;
+                    }
+                }
+            } catch (e) {
+                const textResponse = await response.text();
+                if (textResponse && textResponse.length > 0 && textResponse.length < 500) {
+                    errorMessage = textResponse;
+                }
+                console.warn('Не вдалося розпарсити тіло помилки як JSON:', e);
+            }
+            return errorMessage;
+        }
+
+        // Функції populateGenericSelect та populateSelectWithOptions, якщо вони потрібні на цій сторінці
+        // (для users/index.html вони, ймовірно, не потрібні, оскільки немає випадних списків для заповнення з API)
+        // Але якщо ти їх десь викликаєш, їх теж треба сюди додати.
+        // Я їх поки закоментую, щоб не захаращувати, якщо вони не потрібні саме тут.
+        /*
+        function populateGenericSelect(selectElement, items, valueField, textField, defaultOptionText, addEmptyOptionAsDefault = true) {
+            if (!selectElement) return;
+            selectElement.innerHTML = '';
+            if (addEmptyOptionAsDefault) {
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = "";
+                defaultOpt.textContent = defaultOptionText;
+                selectElement.appendChild(defaultOpt);
+            }
+            if (items && Array.isArray(items)) {
+                items.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item[valueField];
+                    option.textContent = item[textField];
+                    selectElement.appendChild(option);
+                });
+            } else {
+                console.warn(`populateGenericSelect: items is not an array or is undefined for selectElement id: ${selectElement.id}`);
+            }
+        }
+
+        async function populateSelectWithOptions(selectElement, apiUrl, valueField, textField, defaultOptionText, isFilter = false) {
+            if (!selectElement) return;
+            const initialOptionText = isFilter ? defaultOptionText : "Завантаження...";
+            selectElement.innerHTML = `<option value="">${initialOptionText}</option>`;
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`Не вдалося завантажити дані (${response.status}) для ${selectElement.id || 'селекта'} з ${apiUrl}`);
+                }
+                const items = await response.json();
+                populateGenericSelect(selectElement, items, valueField, textField, defaultOptionText, true);
+            } catch (error) {
+                console.error(error.message);
+                selectElement.innerHTML = `<option value="">Помилка завантаження</option>`;
+            }
+        }
+        */
+
+        // --- Логіка для мобільної навігації та активного посилання в хедері ---
+        // Цей код також має бути тут, якщо ти не використовуєш common.js
+        document.addEventListener('DOMContentLoaded', () => {
+            const mobileNavToggle = document.querySelector('.mobile-nav-toggle');
+            const mainNav = document.querySelector('.main-nav');
+
+            if (mobileNavToggle && mainNav) {
+                mobileNavToggle.addEventListener('click', () => {
+                    const isExpanded = mobileNavToggle.getAttribute('aria-expanded') === 'true' || false;
+                    mobileNavToggle.setAttribute('aria-expanded', !isExpanded);
+                    mobileNavToggle.classList.toggle('nav-toggled'); // Для CSS анімації "бургера"
+                    mainNav.classList.toggle('active');
+                });
+            }
+
+            try {
+                const currentPath = window.location.pathname;
+                const navLinks = document.querySelectorAll('.main-nav a');
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    const linkHref = link.getAttribute('href');
+                    if (linkHref) {
+                        if (linkHref === currentPath || (linkHref === '/index.html' && currentPath === '/')) {
+                            link.classList.add('active');
+                        } else if (linkHref !== '/' && linkHref !== '/index.html' && currentPath.startsWith(linkHref.replace(/index\.html$/, ''))) {
+                            if (currentPath.startsWith(linkHref) || currentPath.startsWith(linkHref.substring(0, linkHref.lastIndexOf('/') + 1 || linkHref.length))) {
+                                link.classList.add('active');
+                            }
+                        }
+                    }
+                });
+                const activeLink = document.querySelector('.main-nav a.active');
+                if (!activeLink && (currentPath === '/' || currentPath === '/index.html')) {
+                    const homeLink = document.querySelector('.main-nav a[href="/index.html"], .main-nav a[href="/"]');
+                    if (homeLink) homeLink.classList.add('active');
+                }
+            } catch (e) { console.error("Помилка підсвічування активного посилання:", e); }
+        });
+        // --- КІНЕЦЬ КОДУ, ЯКИЙ МАВ БУТИ У common.js ---
+
+
+        // --- JavaScript, специфічний для users/index.html ---
+        const usersApiUrl = '/api/Users';
+
+        // DOM Elements (ті, що потрібні тільки тут)
+        const userForm = document.getElementById('userForm');
+        const usernameInput = document.getElementById('username');
+        const editUserFormContainer = document.getElementById('editUserFormContainer');
+        const editUserForm = document.getElementById('editUserForm');
+        const editUserIdInput = document.getElementById('editUserId');
+        const editUsernameInput = document.getElementById('editUsername');
+        const cancelUserEditBtn = document.getElementById('cancelUserEditBtn');
+        const usersTableBody = document.getElementById('usersTableBody');
+        const userSearchInput = document.getElementById('userSearchInput');
+        const applyUserSearchBtn = document.getElementById('applyUserSearchBtn');
+        const clearUserSearchBtn = document.getElementById('clearUserSearchBtn');
+        // Глобальна змінна messageContainer для цієї сторінки (якщо showMessage НЕ приймає ID контейнера)
+        const messageContainer = document.getElementById('messageContainer');
+
+
+        // Функції, специфічні для цієї сторінки
+        async function fetchUsers(searchTerm = null) {
+            let url = usersApiUrl;
+            if (searchTerm && searchTerm.trim() !== '') {
+                url += `?search=${encodeURIComponent(searchTerm.trim())}`;
+            }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const users = await response.json();
+                renderUsers(users);
+            } catch (error) {
+                console.error('Помилка завантаження користувачів:', error);
+                showMessage('messageContainer', `Помилка завантаження користувачів: ${error.message}`, 'error');
+                usersTableBody.innerHTML = `<tr><td colspan="3" style="text-align:center;">Не вдалося завантажити дані. ${escapeHtml(error.message)}</td></tr>`;
+            }
+        }
+
+        function renderUsers(users) {
+            usersTableBody.innerHTML = '';
+            if (!users || users.length === 0) {
+                usersTableBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">Користувачі не знайдені.</td></tr>';
+                return;
+            }
+            users.forEach(user => {
+                const row = usersTableBody.insertRow();
+                row.innerHTML = `
+                            <td>${user.id}</td>
+                            <td>${escapeHtml(user.username)}</td>
+                            <td>
+                                <button class="edit-btn" data-id="${user.id}" data-username="${escapeHtml(user.username)}">Редагувати</button>
+                                <button class="delete-btn" data-id="${user.id}">Видалити</button>
+                            </td>
+                        `;
+            });
+        }
+
+        userForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const username = usernameInput.value;
+            if (!username.trim()) {
+                showMessage('messageContainer', "Ім'я користувача не може бути порожнім.", 'error'); return;
+            }
+            const userData = { username: username };
+            console.log('Спроба додати користувача:', JSON.stringify(userData, null, 2));
+            try {
+                const response = await fetch(usersApiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Користувача успішно додано!', 'success');
+                userForm.reset();
+                fetchUsers(userSearchInput.value);
+            } catch (error) {
+                console.error('Помилка додавання користувача:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        function populateEditUserForm(id, currentUsername) {
+            editUserIdInput.value = id;
+            editUsernameInput.value = currentUsername;
+            editUserFormContainer.classList.remove('hidden');
+            editUserFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        editUserForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const id = editUserIdInput.value;
+            const username = editUsernameInput.value;
+            if (!username.trim()) {
+                showMessage('messageContainer', "Нове ім'я користувача не може бути порожнім.", 'error'); return;
+            }
+            const userData = { username: username };
+            console.log(`Спроба оновити користувача ID ${id}:`, JSON.stringify(userData, null, 2));
+            try {
+                const response = await fetch(`${usersApiUrl}/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', "Ім'я користувача успішно оновлено!", 'success');
+                editUserFormContainer.classList.add('hidden'); editUserForm.reset();
+                fetchUsers(userSearchInput.value);
+            } catch (error) {
+                console.error('Помилка оновлення користувача:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        cancelUserEditBtn.addEventListener('click', () => {
+            editUserFormContainer.classList.add('hidden'); editUserForm.reset();
+        });
+
+        usersTableBody.addEventListener('click', async (event) => {
+            const target = event.target.closest('button');
+            if (!target) return;
+
+            if (target.classList.contains('delete-btn')) {
+                const id = target.dataset.id;
+                if (confirm(`Видалити користувача ID: ${id}? УВАГА: Це може бути неможливо, якщо користувач пов'язаний з завданнями, групами тощо.`)) {
+                    try {
+                        const response = await fetch(`${usersApiUrl}/${id}`, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(await handleApiResponseError(response));
+                        showMessage('messageContainer', 'Користувача успішно видалено!', 'success');
+                        fetchUsers(userSearchInput.value);
+                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                populateEditUserForm(target.dataset.id, target.dataset.username);
+            }
+        });
+
+        applyUserSearchBtn.addEventListener('click', () => fetchUsers(userSearchInput.value));
+        clearUserSearchBtn.addEventListener('click', () => {
+            userSearchInput.value = ''; fetchUsers();
+        });
+
+        async function initializePage() {
+            await fetchUsers();
+        }
+
+        // Оскільки common.js (якщо б він був) має DOMContentLoaded,
+        // а тут ми його не маємо, то краще обгорнути ініціалізацію сторінки,
+        // хоча логіка хедера також має DOMContentLoaded.
+        // Якщо логіка хедера вже відпрацювала, то можна викликати initializePage напряму.
+        // Для безпеки, якщо є сумніви:
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializePage);
+        } else {
+            initializePage(); // DOM вже завантажений
+        }
+        // Або просто:
+        // initializePage(); // Якщо логіка хедера (теж у DOMContentLoaded) вже є вище.
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування Групами Завдань</title>
+    <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo"><a href="/index.html">TaskSystem</a></div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                  
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h1>Керування Групами Завдань</h1>
+        <div id="messageContainer"></div>
+
+        <form id="taskGroupForm">
+            <h3>Додати нову групу завдань</h3>
+            <div>
+                <label for="tgName">Назва групи:</label>
+                <input type="text" id="tgName" name="name" required>
+            </div>
+            <div>
+                <label for="tgUserIdSelect">Власник групи (користувач):</label>
+                <select id="tgUserIdSelect" name="userId" required>
+                    <option value="">Завантаження користувачів...</option>
+                </select>
+            </div>
+            <button type="submit">Додати Групу</button>
+        </form>
+
+        <div id="editTaskGroupFormContainer" class="hidden">
+            <h3>Редагувати групу завдань</h3>
+            <form id="editTaskGroupForm">
+                <input type="hidden" id="editTgId">
+                <div>
+                    <label for="editTgName">Назва групи:</label>
+                    <input type="text" id="editTgName" name="name" required>
+                </div>
+                <div>
+                    <label for="editTgUserIdSelect">Власник групи (користувач):</label>
+                    <select id="editTgUserIdSelect" name="userId" required>
+                        <option value="">Завантаження користувачів...</option>
+                    </select>
+                </div>
+                <button type="submit">Зберегти Зміни</button>
+                <button type="button" id="cancelTgEditBtn" class="cancel-btn">Скасувати</button>
+            </form>
+        </div>
+
+        <h3>Список Груп Завдань</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Назва Групи</th>
+                    <th>Власник (ID)</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody id="taskGroupsTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="../js/common.js"></script>
+    <script>
+        const taskGroupsApiUrl = '/api/TaskGroups';
+        const usersApiLookupUrl = '/api/Users/lookup';
+
+        // DOM Elements
+        const taskGroupForm = document.getElementById('taskGroupForm');
+        const tgNameInput = document.getElementById('tgName');
+        const tgUserIdSelect = document.getElementById('tgUserIdSelect');
+
+        const editTaskGroupFormContainer = document.getElementById('editTaskGroupFormContainer');
+        const editTaskGroupForm = document.getElementById('editTaskGroupForm');
+        const editTgIdInput = document.getElementById('editTgId');
+        const editTgNameInput = document.getElementById('editTgName');
+        const editTgUserIdSelect = document.getElementById('editTgUserIdSelect');
+        const cancelTgEditBtn = document.getElementById('cancelTgEditBtn');
+
+        const taskGroupsTableBody = document.getElementById('taskGroupsTableBody');
+        // const messageContainer = document.getElementById('messageContainer'); // Вже є в common.js, якщо showMessage приймає ID
+
+        async function initializeDropdownsForTaskGroups() {
+            await populateSelectWithOptions(tgUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть власника...');
+            await populateSelectWithOptions(editTgUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть власника...');
+        }
+
+        async function fetchTaskGroups() {
+            // Можна додати параметр sortByDate, якщо потрібно
+            const url = `${taskGroupsApiUrl}?sortByDate=desc`; // Завантажуємо новіші першими
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const groups = await response.json();
+                renderTaskGroups(groups);
+            } catch (error) {
+                console.error('Помилка завантаження груп завдань:', error);
+                showMessage('messageContainer', `Помилка завантаження груп: ${error.message}`, 'error');
+                taskGroupsTableBody.innerHTML = `<tr><td colspan="4">Не вдалося завантажити дані. ${escapeHtml(error.message)}</td></tr>`;
+            }
+        }
+
+        function renderTaskGroups(groups) {
+            taskGroupsTableBody.innerHTML = '';
+            if (!groups || groups.length === 0) {
+                taskGroupsTableBody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Групи завдань не знайдено.</td></tr>';
+                return;
+            }
+            groups.forEach(group => {
+                const row = taskGroupsTableBody.insertRow();
+                row.innerHTML = `
+                    <td>${group.id}</td>
+                    <td>${escapeHtml(group.name)}</td>
+                    <td>${escapeHtml(group.ownerUsername)} (ID: ${group.userId})</td>
+                    <td>
+                        <button class="edit-btn" data-id="${group.id}" data-name="${escapeHtml(group.name)}" data-userid="${group.userId}">Редагувати</button>
+                        <button class="delete-btn" data-id="${group.id}">Видалити</button>
+                    </td>
+                `;
+            });
+        }
+
+        taskGroupForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const name = tgNameInput.value;
+            const userId = tgUserIdSelect.value;
+
+            if (!name.trim() || !userId) {
+                showMessage('messageContainer', 'Будь ласка, заповніть назву групи та виберіть власника.', 'error'); return;
+            }
+
+            const groupData = { name: name, userId: parseInt(userId) };
+            console.log('Спроба додати групу завдань:', JSON.stringify(groupData, null, 2));
+
+            try {
+                const response = await fetch(taskGroupsApiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(groupData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Групу завдань успішно додано!', 'success');
+                taskGroupForm.reset(); tgUserIdSelect.value = "";
+                fetchTaskGroups();
+            } catch (error) {
+                console.error('Помилка додавання групи завдань:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        function populateEditTaskGroupForm(id, name, userId) {
+            editTgIdInput.value = id;
+            editTgNameInput.value = name;
+            editTgUserIdSelect.value = userId; // Встановлюємо вибраного користувача
+
+            editTaskGroupFormContainer.classList.remove('hidden');
+            editTaskGroupFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        editTaskGroupForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const id = editTgIdInput.value;
+            const name = editTgNameInput.value;
+            const userId = editTgUserIdSelect.value;
+
+            if (!name.trim() || !userId) {
+                showMessage('messageContainer', 'Будь ласка, заповніть назву групи та виберіть власника.', 'error'); return;
+            }
+
+            const groupData = { id: parseInt(id), name: name, userId: parseInt(userId) };
+            console.log(`Спроба оновити групу ID ${id}:`, JSON.stringify(groupData, null, 2));
+
+            try {
+                const response = await fetch(`${taskGroupsApiUrl}/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(groupData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Групу завдань успішно оновлено!', 'success');
+                editTaskGroupFormContainer.classList.add('hidden'); editTaskGroupForm.reset();
+                fetchTaskGroups();
+            } catch (error) {
+                console.error('Помилка оновлення групи завдань:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        cancelTgEditBtn.addEventListener('click', () => {
+            editTaskGroupFormContainer.classList.add('hidden'); editTaskGroupForm.reset();
+        });
+
+        taskGroupsTableBody.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (target.classList.contains('delete-btn')) {
+                const id = target.dataset.id;
+                if (confirm(`Видалити групу завдань ID: ${id}? УВАГА: Це може бути неможливо, якщо в групі є завдання або члени.`)) {
+                    try {
+                        const response = await fetch(`${taskGroupsApiUrl}/${id}`, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(await handleApiResponseError(response));
+                        showMessage('messageContainer', 'Групу завдань успішно видалено!', 'success');
+                        fetchTaskGroups();
+                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                populateEditTaskGroupForm(target.dataset.id, target.dataset.name, target.dataset.userid);
+            }
+        });
+
+        // Фільтрація поки що не реалізована для груп, але можна додати за потреби
+        // applyFilterBtn.addEventListener('click', () => fetchTaskGroups(filterInput.value));
+        // clearFilterBtn.addEventListener('click', () => { filterInput.value = ''; fetchTaskGroups(); });
+
+        async function initializePage() {
+            await initializeDropdownsForTaskGroups();
+            await fetchTaskGroups();
+        }
+        initializePage();
+    </script>
+</body>
+</html>

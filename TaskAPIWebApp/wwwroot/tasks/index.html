@@ -1,0 +1,306 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування Завданнями</title>
+    <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo">
+                <a href="/index.html">TaskSystem</a>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                    
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h1>Керування Завданнями</h1>
+        <div id="messageContainer"></div>
+
+        <form id="taskForm">
+            <h3>Додати нове завдання</h3>
+            <div>
+                <label for="description">Опис:</label>
+                <textarea id="description" name="description" required></textarea>
+            </div>
+            <div>
+                <label for="statusSelect">Статус:</label>
+                <select id="statusSelect" name="status" required>
+                    <option value="">Виберіть статус...</option>
+                </select>
+            </div>
+            <div>
+                <label for="userIdSelect">Користувач:</label>
+                <select id="userIdSelect" name="userId" required>
+                    <option value="">Завантаження користувачів...</option>
+                </select>
+            </div>
+            <div>
+                <label for="taskGroupIdSelect">Група завдань (необов'язково):</label>
+                <select id="taskGroupIdSelect" name="taskGroupId">
+                    <option value="">Завантаження груп...</option>
+                </select>
+            </div>
+            <button type="submit">Додати Завдання</button>
+        </form>
+
+        <div id="editTaskFormContainer" class="hidden">
+            <h3>Редагувати завдання</h3>
+            <form id="editTaskForm">
+                <input type="hidden" id="editTaskId" name="id">
+                <div>
+                    <label for="editDescription">Опис:</label>
+                    <textarea id="editDescription" name="description" required></textarea>
+                </div>
+                <div>
+                    <label for="editStatusSelect">Статус:</label>
+                    <select id="editStatusSelect" name="status" required>
+                        <option value="">Виберіть статус...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="editUserIdSelect">Користувач:</label>
+                    <select id="editUserIdSelect" name="userId" required>
+                        <option value="">Завантаження користувачів...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="editTaskGroupIdSelect">Група завдань (необов'язково):</label>
+                    <select id="editTaskGroupIdSelect" name="taskGroupId">
+                        <option value="">Завантаження груп...</option>
+                    </select>
+                </div>
+                <button type="submit">Зберегти Зміни</button>
+                <button type="button" id="cancelEditBtn" class="cancel-btn">Скасувати</button>
+            </form>
+        </div>
+
+        <h3>Список Завдань</h3>
+        <div class="filter-container" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <label for="statusFilterInput" style="margin-bottom: 0;">Фільтрувати за статусом (текст):</label> <input type="text" id="statusFilterInput" placeholder="Введіть статус" style="flex-grow: 1;">
+            <button id="applyStatusFilterBtn" type="button">Фільтрувати</button> <button id="clearStatusFilterBtn" type="button" class="cancel-btn">Очистити</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Опис</th>
+                    <th>Статус</th>
+                    <th>ID Користувача</th>
+                    <th>ID Групи</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody id="tasksTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="../js/common.js"></script>
+    <script>
+        // Специфічний JS для сторінки tasks/index.html
+        const tasksApiUrl = '/api/Tasks';
+        const usersApiLookupUrl = '/api/Users/lookup';
+        const taskGroupsApiLookupUrl = '/api/TaskGroups/lookup';
+        const predefinedStatuses = ["Нове", "В роботі", "Виконано", "Відкладено", "Скасовано", "Чернетка"];
+
+        // DOM Елементи
+        const taskForm = document.getElementById('taskForm');
+        const descriptionInput = document.getElementById('description');
+        const statusSelect = document.getElementById('statusSelect');
+        const userIdSelect = document.getElementById('userIdSelect');
+        const taskGroupIdSelect = document.getElementById('taskGroupIdSelect');
+
+        const editTaskForm = document.getElementById('editTaskForm');
+        const editTaskFormContainer = document.getElementById('editTaskFormContainer');
+        const editTaskIdInput = document.getElementById('editTaskId');
+        const editDescriptionInput = document.getElementById('editDescription');
+        const editStatusSelect = document.getElementById('editStatusSelect');
+        const editUserIdSelect = document.getElementById('editUserIdSelect');
+        const editTaskGroupIdSelect = document.getElementById('editTaskGroupIdSelect');
+
+        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const tasksTableBody = document.getElementById('tasksTableBody');
+
+        const statusFilterInput = document.getElementById('statusFilterInput'); // Оновлений ID
+        const applyStatusFilterBtn = document.getElementById('applyStatusFilterBtn'); // Оновлений ID
+        const clearStatusFilterBtn = document.getElementById('clearStatusFilterBtn'); // Оновлений ID
+
+        function populateLocalStatusSelect(selectElement) { // Локальна, якщо predefinedStatuses тут
+            populateGenericSelect(selectElement, predefinedStatuses.map(s => ({ value: s, text: s })), 'value', 'text', 'Виберіть статус...');
+        }
+
+        async function initializeDropdownsForTasks() {
+            populateLocalStatusSelect(statusSelect);
+            populateLocalStatusSelect(editStatusSelect);
+            await populateSelectWithOptions(userIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
+            await populateSelectWithOptions(taskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Без групи');
+            await populateSelectWithOptions(editUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
+            await populateSelectWithOptions(editTaskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Без групи');
+        }
+
+        async function fetchTasks(statusQuery = null) {
+            let url = tasksApiUrl;
+            if (statusQuery && statusQuery.trim() !== '') {
+                url += `?status=${encodeURIComponent(statusQuery.trim())}`;
+            }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const tasks = await response.json();
+                renderTasks(tasks);
+            } catch (error) {
+                console.error('Помилка завантаження завдань:', error);
+                showMessage('messageContainer', `Помилка завантаження завдань: ${error.message}`, 'error');
+                tasksTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Не вдалося завантажити завдання. ${escapeHtml(error.message)}</td></tr>`;
+            }
+        }
+
+        function renderTasks(tasks) {
+            tasksTableBody.innerHTML = '';
+            if (!tasks || tasks.length === 0) {
+                tasksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Завдання не знайдено.</td></tr>';
+                return;
+            }
+            tasks.forEach(task => {
+                const row = tasksTableBody.insertRow();
+                row.innerHTML = `
+                        <td>${task.id}</td><td>${escapeHtml(task.description)}</td><td>${escapeHtml(task.status)}</td>
+                        <td>${task.userId}</td><td>${task.taskGroupId !== null ? task.taskGroupId : ''}</td>
+                        <td>
+                            <button class="edit-btn" data-id="${task.id}">Редагувати</button>
+                            <button class="delete-btn" data-id="${task.id}">Видалити</button>
+                        </td>
+                    `;
+            });
+        }
+
+        taskForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const description = descriptionInput.value;
+            const status = statusSelect.value;
+            const userIdStr = userIdSelect.value;
+            const taskGroupIdStr = taskGroupIdSelect.value;
+
+            if (!status) { showMessage('messageContainer', 'Будь ласка, виберіть статус.', 'error'); return; }
+            if (!userIdStr) { showMessage('messageContainer', 'Будь ласка, виберіть користувача.', 'error'); return; }
+
+            const taskData = {
+                description: description, status: status, userId: parseInt(userIdStr),
+                taskGroupId: taskGroupIdStr ? parseInt(taskGroupIdStr) : null
+            };
+            console.log('Спроба додати завдання:', JSON.stringify(taskData, null, 2));
+            try {
+                const response = await fetch(tasksApiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Завдання успішно додано!', 'success');
+                taskForm.reset(); statusSelect.value = ""; userIdSelect.value = ""; taskGroupIdSelect.value = "";
+                fetchTasks(statusFilterInput.value);
+            } catch (error) {
+                console.error('Помилка додавання завдання:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        async function populateEditTaskForm(id) { // Перейменовано populateEditForm
+            try {
+                const response = await fetch(`${tasksApiUrl}/${id}`);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const task = await response.json();
+                editTaskIdInput.value = task.id;
+                editDescriptionInput.value = task.description;
+                editStatusSelect.value = task.status;
+                editUserIdSelect.value = task.userId;
+                editTaskGroupIdSelect.value = task.taskGroupId !== null ? task.taskGroupId : '';
+                editTaskFormContainer.classList.remove('hidden');
+                editTaskFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (error) {
+                console.error('Помилка завантаження завдання для редагування:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        }
+
+        editTaskForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const id = editTaskIdInput.value;
+            const description = editDescriptionInput.value;
+            const status = editStatusSelect.value;
+            const userIdStr = editUserIdSelect.value;
+            const taskGroupIdStr = editTaskGroupIdSelect.value;
+
+            if (!status) { showMessage('messageContainer', 'Будь ласка, виберіть статус.', 'error'); return; }
+            if (!userIdStr) { showMessage('messageContainer', 'Будь ласка, виберіть користувача.', 'error'); return; }
+
+            const taskData = {
+                id: parseInt(id), description: description, status: status, userId: parseInt(userIdStr),
+                taskGroupId: taskGroupIdStr ? parseInt(taskGroupIdStr) : null
+            };
+            console.log('Спроба оновити завдання:', JSON.stringify(taskData, null, 2));
+            try {
+                const response = await fetch(`${tasksApiUrl}/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Завдання успішно оновлено!', 'success');
+                editTaskFormContainer.classList.add('hidden'); editTaskForm.reset();
+                fetchTasks(statusFilterInput.value);
+            } catch (error) {
+                console.error('Помилка оновлення завдання:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        cancelEditBtn.addEventListener('click', () => {
+            editTaskFormContainer.classList.add('hidden'); editTaskForm.reset();
+        });
+
+        tasksTableBody.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (target.classList.contains('delete-btn')) {
+                const id = target.dataset.id;
+                if (confirm(`Видалити завдання ID: ${id}?`)) {
+                    try {
+                        const response = await fetch(`${tasksApiUrl}/${id}`, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(await handleApiResponseError(response));
+                        showMessage('messageContainer', 'Завдання успішно видалено!', 'success');
+                        fetchTasks(statusFilterInput.value);
+                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                const id = target.dataset.id;
+                populateEditTaskForm(id); // Використовуємо перейменовану функцію
+            }
+        });
+
+        applyStatusFilterBtn.addEventListener('click', () => fetchTasks(statusFilterInput.value)); // Оновлений ID
+        clearStatusFilterBtn.addEventListener('click', () => { // Оновлений ID
+            statusFilterInput.value = ''; fetchTasks();
+        });
+
+        async function initializePage() {
+            await initializeDropdownsForTasks(); // Змінена назва функції
+            await fetchTasks();
+        }
+        initializePage();
+    </script>
+</body>
+</html>

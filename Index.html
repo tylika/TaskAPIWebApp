@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Управління коментарями</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.20.15/babel.min.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const App = () => {
+            const [comments, setComments] = useState([]);
+            const [tasks, setTasks] = useState([]);
+            const [submissions, setSubmissions] = useState([]);
+            const [newComment, setNewComment] = useState('');
+            const [selectedTask, setSelectedTask] = useState('');
+            const [selectedSubmission, setSelectedSubmission] = useState('');
+            const [editComment, setEditComment] = useState(null);
+            const [message, setMessage] = useState('');
+            const [isModalOpen, setIsModalOpen] = useState(false);
+
+            // Фіксований UserId для тестування (користувач1)
+            const currentUserId = 1;
+
+            // Отримання коментарів (без параметрів або з фільтром за потреби)
+            const fetchComments = async () => {
+                try {
+                    const response = await fetch('api/Comments');
+                    if (!response.ok) throw new Error('Не вдалося отримати коментарі');
+                    const data = await response.json();
+                    setComments(data);
+                } catch (error) {
+                    setMessage(`Помилка: ${error.message}`);
+                    console.error('Unable to get comments.', error);
+                }
+            };
+
+            // Отримання завдань
+            const fetchTasks = async () => {
+                try {
+                    const response = await fetch('api/Tasks');
+                    if (!response.ok) throw new Error('Не вдалося отримати завдання');
+                    const data = await response.json();
+                    setTasks(data);
+                } catch (error) {
+                    console.error('Unable to get tasks.', error);
+                }
+            };
+
+            // Отримання подань
+            const fetchSubmissions = async () => {
+                try {
+                    const response = await fetch('api/TaskSubmissions');
+                    if (!response.ok) throw new Error('Не вдалося отримати подання');
+                    const data = await response.json();
+                    setSubmissions(data);
+                } catch (error) {
+                    console.error('Unable to get submissions.', error);
+                }
+            };
+
+            // Ініціалізація даних
+            useEffect(() => {
+                fetchComments();
+                fetchTasks();
+                fetchSubmissions();
+            }, []);
+
+            // Додавання коментаря
+            const handleAddComment = async (e) => {
+                e.preventDefault();
+                if (!newComment.trim()) {
+                    setMessage('Будь ласка, введіть текст коментаря');
+                    return;
+                }
+                if (selectedTask && selectedSubmission) {
+                    setMessage('Виберіть або завдання, або подання, але не обидва');
+                    return;
+                }
+                const comment = {
+                    content: newComment,
+                    userId: currentUserId,
+                    taskId: selectedTask ? parseInt(selectedTask) : null,
+                    taskSubmissionId: selectedSubmission ? parseInt(selectedSubmission) : null
+                };
+                try {
+                    const response = await fetch('api/Comments', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(comment),
+                    });
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.message || 'Не вдалося додати коментар');
+                    }
+                    setNewComment('');
+                    setSelectedTask('');
+                    setSelectedSubmission('');
+                    setMessage('Коментар успішно додано!');
+                    fetchComments();
+                } catch (error) {
+                    setMessage(`Помилка: ${error.message}`);
+                }
+            };
+
+            // Видалення коментаря
+            const handleDeleteComment = async (id) => {
+                try {
+                    const response = await fetch(`api/Comments/${id}`, {
+                        method: 'DELETE',
+                    });
+                    if (!response.ok) throw new Error('Не вдалося видалити коментар');
+                    setMessage('Коментар успішно видалено!');
+                    fetchComments();
+                } catch (error) {
+                    setMessage(`Помилка: ${error.message}`);
+                }
+            };
+
+            // Відкриття модального вікна для редагування
+            const handleEditComment = (comment) => {
+                setEditComment(comment);
+                setIsModalOpen(true);
+            };
+
+            // Оновлення коментаря
+            const handleUpdateComment = async (e) => {
+                e.preventDefault();
+                if (!editComment.content.trim()) {
+                    setMessage('Будь ласка, введіть текст коментаря');
+                    return;
+                }
+                if (editComment.taskId && editComment.taskSubmissionId) {
+                    setMessage('Виберіть або завдання, або подання, але не обидва');
+                    return;
+                }
+                try {
+                    const response = await fetch(`api/Comments/${editComment.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify(editComment),
+                    });
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.message || 'Не вдалося оновити коментар');
+                    }
+                    setIsModalOpen(false);
+                    setEditComment(null);
+                    setMessage('Коментар успішно оновлено!');
+                    fetchComments();
+                } catch (error) {
+                    setMessage(`Помилка: ${error.message}`);
+                }
+            };
+
+            return (
+                <div className="container mx-auto p-4">
+                    <h1 className="text-3xl font-bold text-gray-800 mb-6">Управління коментарями</h1>
+
+                    {/* Інструкція для користувача */}
+                    <div className="bg-blue-100 p-4 rounded-md mb-6">
+                        <h2 className="text-lg font-semibold">Як користуватися?</h2>
+                        <p>1. Напишіть коментар у великому полі нижче.</p>
+                        <p>2. (Необов’язково) Виберіть завдання або подання зі списку.</p>
+                        <p>3. Натисніть "Додати коментар", щоб зберегти.</p>
+                        <p>4. Щоб змінити чи видалити коментар, натисніть відповідну кнопку на картці.</p>
+                    </div>
+
+                    {/* Форма для додавання коментаря */}
+                    <form onSubmit={handleAddComment} className="bg-white p-6 rounded-lg shadow-md mb-6">
+                        <h2 className="text-xl font-semibold mb-4">Додати новий коментар</h2>
+                        <textarea
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            placeholder="Введіть ваш коментар тут..."
+                            className="w-full p-2 border rounded-md mb-4"
+                            rows="4"
+                            required
+                        ></textarea>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <select
+                                value={selectedTask}
+                                onChange={(e) => setSelectedTask(e.target.value)}
+                                className="w-full p-2 border rounded-md"
+                            >
+                                <option value="">Без завдання</option>
+                                {tasks.map((task) => (
+                                    <option key={task.id} value={task.id}>
+                                        {task.description || `Завдання ${task.id}`}
+                                    </option>
+                                ))}
+                            </select>
+                            <select
+                                value={selectedSubmission}
+                                onChange={(e) => setSelectedSubmission(e.target.value)}
+                                className="w-full p-2 border rounded-md"
+                            >
+                                <option value="">Без подання</option>
+                                {submissions.map((submission) => (
+                                    <option key={submission.id} value={submission.id}>
+                                        Подання {submission.id} до завдання {submission.taskId}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <button
+                            type="submit"
+                            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                        >
+                            Додати коментар
+                        </button>
+                    </form>
+
+                    {/* Повідомлення */}
+                    {message && (
+                        <div
+                            className={`p-4 rounded-md mb-6 ${
+                                message.includes('Помилка') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                            }`}
+                        >
+                            {message}
+                        </div>
+                    )}
+
+                    {/* Список коментарів */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {comments.length === 0 ? (
+                            <p className="text-gray-500">Ще немає коментарів. Додайте перший!</p>
+                        ) : (
+                            comments.map((comment) => (
+                                <div key={comment.id} className="bg-white p-4 rounded-lg shadow-md">
+                                    <p className="text-gray-800">{comment.content}</p>
+                                    <p className="text-sm text-gray-500">
+                                        Створено: {new Date(comment.createdAt).toLocaleString()}
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                        Завдання: {comment.taskId ? `ID ${comment.id}` : 'Немає'}
+                                    </p>
+                                    <p className="text-sm text-gray-500">
+                                        Подання: {comment.taskSubmissionId ? `ID ${comment.taskSubmissionId}` : 'Немає'}
+                                    </p>
+                                    <div className="mt-4 flex space-x-2">
+                                        <button
+                                            onClick={() => handleEditComment(comment)}
+                                            className="bg-yellow-500 text-white px-3 py-1 rounded-md hover:bg-yellow-600 transition"
+                                        >
+                                            Редагувати
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteComment(comment.id)}
+                                            className="bg-red-500 text-white px-3 py-1 rounded-md hover:bg-red-600 transition"
+                                        >
+                                            Видалити
+                                        </button>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+
+                    {/* Модальне вікно для редагування */}
+                    {isModalOpen && (
+                        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+                            <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
+                                <h2 className="text-xl font-semibold mb-4">Редагувати коментар</h2>
+                                <form onSubmit={handleUpdateComment}>
+                                    <textarea
+                                        value={editComment.content}
+                                        onChange={(e) =>
+                                            setEditComment({ ...editComment, content: e.target.value })
+                                        }
+                                        className="w-full p-2 border rounded-md mb-4"
+                                        rows="4"
+                                        required
+                                    ></textarea>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                        <select
+                                            value={editComment.taskId || ''}
+                                            onChange={(e) =>
+                                                setEditComment({
+                                                    ...editComment,
+                                                    taskId: e.target.value ? parseInt(e.target.value) : null,
+                                                })
+                                            }
+                                            className="w-full p-2 border rounded-md"
+                                        >
+                                            <option value="">Без завдання</option>
+                                            {tasks.map((task) => (
+                                                <option key={task.id} value={task.id}>
+                                                    {task.description || `Завдання ${task.id}`}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <select
+                                            value={editComment.taskSubmissionId || ''}
+                                            onChange={(e) =>
+                                                setEditComment({
+                                                    ...editComment,
+                                                    taskSubmissionId: e.target.value ? parseInt(e.target.value) : null,
+                                                })
+                                            }
+                                            className="w-full p-2 border rounded-md"
+                                        >
+                                            <option value="">Без подання</option>
+                                            {submissions.map((submission) => (
+                                                <option key={submission.id} value={submission.id}>
+                                                    Подання {submission.id} до завдання {submission.taskId}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex justify-end space-x-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsModalOpen(false)}
+                                            className="bg-gray-300 text-gray-800 px-4 py-2 rounded-md hover:bg-gray-400 transition"
+                                        >
+                                            Скасувати
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+                                        >
+                                            Зберегти
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>

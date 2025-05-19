@@ -1,0 +1,274 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування Членами Груп</title>
+    <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo">
+                <a href="/index.html">TaskSystem</a>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                  
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h1>Керування Членами Груп</h1>
+        <div id="messageContainer"></div>
+
+        <form id="groupMemberForm">
+            <h3>Додати члена до групи</h3>
+            <div>
+                <label for="gmUserIdSelect">Користувач:</label> <select id="gmUserIdSelect" name="userId" required>
+                    <option value="">Завантаження користувачів...</option>
+                </select>
+            </div>
+            <div>
+                <label for="gmTaskGroupIdSelect">Група завдань:</label> <select id="gmTaskGroupIdSelect" name="taskGroupId" required>
+                    <option value="">Завантаження груп...</option>
+                </select>
+            </div>
+            <div>
+                <label for="gmRoleSelect">Роль:</label> <select id="gmRoleSelect" name="role" required>
+                    <option value="">Виберіть роль...</option>
+                </select>
+            </div>
+            <button type="submit">Додати Члена</button>
+        </form>
+
+        <div id="editGroupMemberFormContainer" class="hidden">
+            <h3>Редагувати роль члена групи</h3>
+            <form id="editGroupMemberForm">
+                <input type="hidden" id="editGmUserIdHidden">
+                <input type="hidden" id="editGmTaskGroupIdHidden">
+                <div><label>Користувач:</label><p id="editGmUsernameDisplay"></p></div>
+                <div><label>Група завдань:</label><p id="editGmTaskGroupNameDisplay"></p></div>
+                <div>
+                    <label for="editGmRoleSelect">Роль:</label> <select id="editGmRoleSelect" name="role" required>
+                        <option value="">Виберіть роль...</option>
+                    </select>
+                </div>
+                <button type="submit">Зберегти Роль</button>
+                <button type="button" id="cancelGmEditBtn" class="cancel-btn">Скасувати</button>
+            </form>
+        </div>
+
+        <h3>Список Членів Груп</h3>
+        <div class="filter-container" style="margin-bottom: 1rem; display: flex; align-items: center; gap: 0.5rem;">
+            <label for="filterGmTaskGroupIdSelect" style="margin-bottom: 0;">Фільтр за Групою:</label> <select id="filterGmTaskGroupIdSelect" style="min-width: 200px;">
+                <option value="">Всі групи</option>
+            </select>
+            <button id="applyGmFilterBtn" type="button" style="margin-left:10px;">Фільтрувати</button> <button id="clearGmFilterBtn" type="button" class="cancel-btn">Очистити</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Користувач (ID)</th>
+                    <th>Група (ID)</th>
+                    <th>Роль</th>
+                    <th>Дата приєднання</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody id="groupMembersTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="../js/common.js"></script>
+    <script>
+        // Специфічний JS для сторінки groupmembers/index.html
+        const groupMembersApiUrl = '/api/GroupMembers';
+        // usersApiLookupUrl, taskGroupsApiLookupUrl - використовуються з common.js
+        const usersApiLookupUrl = '/api/Users/lookup';
+        const taskGroupsApiLookupUrl = '/api/TaskGroups/lookup';
+
+        const predefinedRoles = ["Member", "Admin", "Viewer"];
+
+        // DOM Елементи
+        const groupMemberForm = document.getElementById('groupMemberForm');
+        const gmUserIdSelect = document.getElementById('gmUserIdSelect'); // Змінені ID
+        const gmTaskGroupIdSelect = document.getElementById('gmTaskGroupIdSelect');
+        const gmRoleSelect = document.getElementById('gmRoleSelect');
+
+        const editGroupMemberForm = document.getElementById('editGroupMemberForm');
+        const editGroupMemberFormContainer = document.getElementById('editGroupMemberFormContainer');
+        const editGmUserIdHidden = document.getElementById('editGmUserIdHidden');
+        const editGmTaskGroupIdHidden = document.getElementById('editGmTaskGroupIdHidden');
+        const editGmUsernameDisplay = document.getElementById('editGmUsernameDisplay');
+        const editGmTaskGroupNameDisplay = document.getElementById('editGmTaskGroupNameDisplay');
+        const editGmRoleSelect = document.getElementById('editGmRoleSelect');
+
+        const cancelGmEditBtn = document.getElementById('cancelGmEditBtn'); // Змінений ID
+        const groupMembersTableBody = document.getElementById('groupMembersTableBody');
+
+        const filterGmTaskGroupIdSelect = document.getElementById('filterGmTaskGroupIdSelect'); // Змінений ID
+        const applyGmFilterBtn = document.getElementById('applyGmFilterBtn'); // Змінений ID
+        const clearGmFilterBtn = document.getElementById('clearGmFilterBtn'); // Змінений ID
+
+        function populateGmRoleSelect(selectElement) { // Локальна функція для уникнення конфліктів, якщо predefinedRoles різні
+            populateGenericSelect(selectElement, predefinedRoles.map(r => ({ value: r, text: r })), 'value', 'text', 'Виберіть роль...');
+        }
+
+        async function initializeDropdownsForGroupMembers() {
+            await populateSelectWithOptions(gmUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
+            await populateSelectWithOptions(gmTaskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Виберіть групу...');
+            populateGmRoleSelect(gmRoleSelect); // Використовуємо локальну
+
+            await populateSelectWithOptions(filterGmTaskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Всі групи', true);
+            populateGmRoleSelect(editGmRoleSelect); // Використовуємо локальну
+        }
+
+        async function fetchGroupMembers(filterGroupId = null) {
+            let url = groupMembersApiUrl;
+            if (filterGroupId) {
+                url += `?taskGroupId=${filterGroupId}`;
+            }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const members = await response.json();
+                renderGroupMembers(members);
+            } catch (error) {
+                console.error('Помилка завантаження членів груп:', error);
+                showMessage('messageContainer', `Помилка завантаження членів груп: ${error.message}`, 'error');
+                groupMembersTableBody.innerHTML = `<tr><td colspan="5" style="text-align:center;">Не вдалося завантажити дані. ${escapeHtml(error.message)}</td></tr>`;
+            }
+        }
+
+        function renderGroupMembers(members) {
+            groupMembersTableBody.innerHTML = '';
+            if (!members || members.length === 0) {
+                groupMembersTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Члени групи не знайдені.</td></tr>';
+                return;
+            }
+            members.forEach(member => {
+                const row = groupMembersTableBody.insertRow();
+                const joinedAt = member.joinedAt ? new Date(member.joinedAt).toLocaleDateString('uk-UA') : 'N/A';
+                row.innerHTML = `
+                        <td>${escapeHtml(member.username)} (ID: ${member.userId})</td>
+                        <td>${escapeHtml(member.taskGroupName)} (ID: ${member.taskGroupId})</td>
+                        <td>${escapeHtml(member.role)}</td>
+                        <td>${joinedAt}</td>
+                        <td>
+                            <button class="edit-btn" data-user-id="${member.userId}" data-group-id="${member.taskGroupId}" data-username="${escapeHtml(member.username)}" data-groupname="${escapeHtml(member.taskGroupName)}" data-role="${escapeHtml(member.role)}">Редагувати Роль</button>
+                            <button class="delete-btn" data-user-id="${member.userId}" data-group-id="${member.taskGroupId}">Видалити</button>
+                        </td>
+                    `;
+            });
+        }
+
+        groupMemberForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const userId = gmUserIdSelect.value;
+            const taskGroupId = gmTaskGroupIdSelect.value;
+            const role = gmRoleSelect.value;
+
+            if (!userId || !taskGroupId || !role) {
+                showMessage('messageContainer', 'Будь ласка, заповніть всі обов\'язкові поля.', 'error'); return;
+            }
+            const memberData = { userId: parseInt(userId), taskGroupId: parseInt(taskGroupId), role: role };
+            console.log('Спроба додати члена групи:', JSON.stringify(memberData, null, 2));
+            try {
+                const response = await fetch(groupMembersApiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(memberData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Члена групи успішно додано!', 'success');
+                groupMemberForm.reset(); gmUserIdSelect.value = ""; gmTaskGroupIdSelect.value = ""; gmRoleSelect.value = "";
+                fetchGroupMembers(filterGmTaskGroupIdSelect.value);
+            } catch (error) {
+                console.error('Помилка додавання члена групи:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        function populateEditGroupMemberForm(userId, groupId, username, groupName, currentRole) {
+            editGmUserIdHidden.value = userId;
+            editGmTaskGroupIdHidden.value = groupId;
+            editGmUsernameDisplay.textContent = username;
+            editGmTaskGroupNameDisplay.textContent = groupName;
+            editGmRoleSelect.value = currentRole;
+            editGroupMemberFormContainer.classList.remove('hidden');
+            editGroupMemberFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        editGroupMemberForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const userId = editGmUserIdHidden.value;
+            const taskGroupId = editGmTaskGroupIdHidden.value;
+            const role = editGmRoleSelect.value;
+
+            if (!role) { showMessage('messageContainer', 'Будь ласка, виберіть нову роль.', 'error'); return; }
+            const roleData = { role: role };
+            console.log('Спроба оновити роль члена:', JSON.stringify(roleData, null, 2));
+            try {
+                const response = await fetch(`${groupMembersApiUrl}/user/${userId}/group/${taskGroupId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(roleData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Роль члена групи успішно оновлено!', 'success');
+                editGroupMemberFormContainer.classList.add('hidden'); editGroupMemberForm.reset();
+                fetchGroupMembers(filterGmTaskGroupIdSelect.value);
+            } catch (error) {
+                console.error('Помилка оновлення ролі:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        cancelGmEditBtn.addEventListener('click', () => { // Змінений ID
+            editGroupMemberFormContainer.classList.add('hidden');
+            editGroupMemberForm.reset();
+        });
+
+        groupMembersTableBody.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (target.classList.contains('delete-btn')) {
+                const userId = target.dataset.userId; const groupId = target.dataset.groupId;
+                if (confirm(`Видалити члена (User ID: ${userId}) з групи (Group ID: ${groupId})?`)) {
+                    try {
+                        const response = await fetch(`${groupMembersApiUrl}/user/${userId}/group/${groupId}`, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(await handleApiResponseError(response));
+                        showMessage('messageContainer', 'Члена групи успішно видалено!', 'success');
+                        fetchGroupMembers(filterGmTaskGroupIdSelect.value);
+                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                const userId = target.dataset.userId; const groupId = target.dataset.groupId;
+                const username = target.dataset.username; const groupName = target.dataset.groupname;
+                const currentRole = target.dataset.role;
+                populateEditGroupMemberForm(userId, groupId, username, groupName, currentRole);
+            }
+        });
+
+        applyGmFilterBtn.addEventListener('click', () => fetchGroupMembers(filterGmTaskGroupIdSelect.value)); // Змінений ID
+        clearGmFilterBtn.addEventListener('click', () => { // Змінений ID
+            filterGmTaskGroupIdSelect.value = ''; fetchGroupMembers();
+        });
+
+        async function initializePage() {
+            await initializeDropdownsForGroupMembers(); // Змінена назва функції
+            await fetchGroupMembers();
+        }
+        initializePage();
+    </script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування Вкладеннями Завдань</title>
+    <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo"><a href="/index.html">TaskSystem</a></div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                    
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h1>Керування Вкладеннями Завдань</h1>
+        <div id="messageContainer"></div>
+
+        <form id="attachmentForm">
+            <h3>Додати нове вкладення</h3>
+            <div>
+                <label for="attTaskIdSelect">Завдання (до якого прикріпити):</label>
+                <select id="attTaskIdSelect" name="taskId" required>
+                    <option value="">Завантаження завдань...</option>
+                </select>
+            </div>
+            <div>
+                <label for="filePath">Шлях до файлу (поточна імплементація):</label>
+                <input type="text" id="filePath" name="filePath" required placeholder="/uploads/example.pdf">
+            </div>
+            <button type="submit">Додати Вкладення</button>
+        </form>
+
+        <div id="editAttachmentFormContainer" class="hidden">
+            <h3>Редагувати шлях вкладення</h3>
+            <form id="editAttachmentForm">
+                <input type="hidden" id="editAttachmentId">
+                <div>
+                    <label>Завдання:</label>
+                    <p id="editAttTaskDisplay"></p> <input type="hidden" id="editAttTaskIdHidden">
+                </div>
+                <div>
+                    <label for="editFilePath">Новий шлях до файлу:</label>
+                    <input type="text" id="editFilePath" name="filePath" required>
+                </div>
+                <button type="submit">Зберегти Шлях</button>
+                <button type="button" id="cancelAttEditBtn" class="cancel-btn">Скасувати</button>
+            </form>
+        </div>
+
+        <h3>Список Вкладень</h3>
+        <div class="filter-container" style="margin-bottom: 1rem;">
+            <label for="filterAttTaskIdSelect">Фільтр за Завданням:</label>
+            <select id="filterAttTaskIdSelect" style="min-width: 200px;">
+                <option value="">Всі завдання</option>
+            </select>
+            <button id="applyAttFilterBtn" type="button" style="margin-left:10px;">Фільтрувати</button>
+            <button id="clearAttFilterBtn" type="button" class="cancel-btn">Очистити</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Завдання</th>
+                    <th>Шлях до файлу</th>
+                    <th>Завантажено</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody id="attachmentsTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="../js/common.js"></script>
+    <script>
+        const attachmentsApiUrl = '/api/TaskAttachments';
+        const tasksApiLookupUrl = '/api/Tasks/lookup'; // Потрібен для вибору завдання
+
+        // DOM Elements
+        const attachmentForm = document.getElementById('attachmentForm');
+        const attTaskIdSelect = document.getElementById('attTaskIdSelect');
+        const filePathInput = document.getElementById('filePath');
+        // const fileUploadInput = document.getElementById('fileUpload'); // Для реального завантаження
+
+        const editAttachmentFormContainer = document.getElementById('editAttachmentFormContainer');
+        const editAttachmentForm = document.getElementById('editAttachmentForm');
+        const editAttachmentIdInput = document.getElementById('editAttachmentId');
+        const editAttTaskDisplay = document.getElementById('editAttTaskDisplay');
+        const editAttTaskIdHidden = document.getElementById('editAttTaskIdHidden');
+        const editFilePathInput = document.getElementById('editFilePath');
+        const cancelAttEditBtn = document.getElementById('cancelAttEditBtn');
+
+        const attachmentsTableBody = document.getElementById('attachmentsTableBody');
+        const filterAttTaskIdSelect = document.getElementById('filterAttTaskIdSelect');
+        const applyAttFilterBtn = document.getElementById('applyAttFilterBtn');
+        const clearAttFilterBtn = document.getElementById('clearAttFilterBtn');
+
+        async function initializeDropdownsForAttachments() {
+            await populateSelectWithOptions(attTaskIdSelect, tasksApiLookupUrl, 'id', 'description', 'Виберіть завдання...');
+            await populateSelectWithOptions(filterAttTaskIdSelect, tasksApiLookupUrl, 'id', 'description', 'Всі завдання', true);
+        }
+
+        async function fetchAttachments(filterTaskId = null) {
+            let url = attachmentsApiUrl;
+            if (filterTaskId) {
+                url += `?taskId=${filterTaskId}`;
+            }
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const attachments = await response.json();
+                renderAttachments(attachments);
+            } catch (error) {
+                console.error('Помилка завантаження вкладень:', error);
+                showMessage('messageContainer', `Помилка завантаження вкладень: ${error.message}`, 'error');
+                attachmentsTableBody.innerHTML = `<tr><td colspan="5">Не вдалося завантажити дані. ${escapeHtml(error.message)}</td></tr>`;
+            }
+        }
+
+        function renderAttachments(attachments) {
+            attachmentsTableBody.innerHTML = '';
+            if (!attachments || attachments.length === 0) {
+                attachmentsTableBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Вкладення не знайдено.</td></tr>';
+                return;
+            }
+            attachments.forEach(att => {
+                const row = attachmentsTableBody.insertRow();
+                const uploadedAt = att.uploadedAt ? new Date(att.uploadedAt).toLocaleString('uk-UA') : 'N/A';
+                // Робимо FilePath клікабельним, якщо це відносний шлях, який можна відкрити
+                const filePathDisplay = att.filePath.startsWith('/') || att.filePath.startsWith('http')
+                                      ? `<a href="${escapeHtml(att.filePath)}" target="_blank">${escapeHtml(att.filePath)}</a>`
+                                      : escapeHtml(att.filePath);
+                row.innerHTML = `
+                    <td>${att.id}</td>
+                    <td>${escapeHtml(att.taskDescription)} (ID: ${att.taskId})</td>
+                    <td>${filePathDisplay}</td>
+                    <td>${uploadedAt}</td>
+                    <td>
+                        <button class="edit-btn" data-id="${att.id}" data-task-id="${att.taskId}" data-task-desc="${escapeHtml(att.taskDescription)}" data-filepath="${escapeHtml(att.filePath)}">Редагувати Шлях</button>
+                        <button class="delete-btn" data-id="${att.id}">Видалити</button>
+                    </td>
+                `;
+            });
+        }
+
+        attachmentForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const taskId = attTaskIdSelect.value;
+            const filePath = filePathInput.value; // Поки що беремо шлях з інпуту
+
+            if (!taskId) { showMessage('messageContainer', 'Будь ласка, виберіть завдання.', 'error'); return; }
+            if (!filePath.trim()) { showMessage('messageContainer', 'Будь ласка, вкажіть шлях до файлу.', 'error'); return; }
+
+            const attachmentData = { taskId: parseInt(taskId), filePath: filePath };
+
+            // Для реального завантаження файлу:
+            // const formData = new FormData();
+            // formData.append('taskId', taskId);
+            // formData.append('file', fileUploadInput.files[0]);
+            // console.log('Спроба додати вкладення (файл):', fileUploadInput.files[0] ? fileUploadInput.files[0].name : 'файл не вибрано');
+            // try {
+            //     const response = await fetch(attachmentsApiUrl, { method: 'POST', body: formData }); // Без Content-Type для FormData
+            // ...
+            // }
+
+            console.log('Спроба додати вкладення (шлях):', JSON.stringify(attachmentData, null, 2));
+            try {
+                const response = await fetch(attachmentsApiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(attachmentData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Вкладення успішно додано!', 'success');
+                attachmentForm.reset(); attTaskIdSelect.value = "";
+                fetchAttachments(filterAttTaskIdSelect.value);
+            } catch (error) {
+                console.error('Помилка додавання вкладення:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        function populateEditAttachmentForm(id, taskId, taskDesc, filepath) {
+            editAttachmentIdInput.value = id;
+            editAttTaskIdHidden.value = taskId; // TaskId не редагуємо, просто зберігаємо
+            editAttTaskDisplay.textContent = `${taskDesc} (ID: ${taskId})`;
+            editFilePathInput.value = filepath;
+            editAttachmentFormContainer.classList.remove('hidden');
+            editAttachmentFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+        editAttachmentForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const id = editAttachmentIdInput.value;
+            const filePath = editFilePathInput.value;
+            // TaskId не змінюється при редагуванні шляху, беремо з прихованого поля
+            // const taskId = editAttTaskIdHidden.value;
+
+            if (!filePath.trim()) { showMessage('messageContainer', 'Будь ласка, вкажіть новий шлях до файлу.', 'error'); return; }
+
+            const updateData = { filePath: filePath /*, taskId: parseInt(taskId) */ }; // Надсилаємо тільки те, що оновлюємо
+            console.log(`Спроба оновити вкладення ID ${id}:`, JSON.stringify(updateData, null, 2));
+            try {
+                const response = await fetch(`${attachmentsApiUrl}/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Шлях вкладення успішно оновлено!', 'success');
+                editAttachmentFormContainer.classList.add('hidden'); editAttachmentForm.reset();
+                fetchAttachments(filterAttTaskIdSelect.value);
+            } catch (error) {
+                console.error('Помилка оновлення вкладення:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        cancelAttEditBtn.addEventListener('click', () => {
+            editAttachmentFormContainer.classList.add('hidden'); editAttachmentForm.reset();
+        });
+
+        attachmentsTableBody.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (target.classList.contains('delete-btn')) {
+                const id = target.dataset.id;
+                if (confirm(`Видалити вкладення ID: ${id}?`)) {
+                    try {
+                        const response = await fetch(`${attachmentsApiUrl}/${id}`, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(await handleApiResponseError(response));
+                        showMessage('messageContainer', 'Вкладення успішно видалено!', 'success');
+                        fetchAttachments(filterAttTaskIdSelect.value);
+                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                populateEditAttachmentForm(
+                    target.dataset.id,
+                    target.dataset.taskId,
+                    target.dataset.taskDesc,
+                    target.dataset.filepath
+                );
+            }
+        });
+
+        applyAttFilterBtn.addEventListener('click', () => fetchAttachments(filterAttTaskIdSelect.value));
+        clearAttFilterBtn.addEventListener('click', () => {
+            filterAttTaskIdSelect.value = ''; fetchAttachments();
+        });
+
+        async function initializePage() {
+            await initializeDropdownsForAttachments();
+            await fetchAttachments();
+        }
+        initializePage();
+    </script>
+</body>
+</html>

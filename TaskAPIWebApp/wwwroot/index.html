@@ -1,0 +1,261 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Головна - TaskSystem</title>
+    <link rel="stylesheet" href="/css/site.css">
+    <style>
+        /* Додаткові стилі для карток на головній сторінці */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); /* Адаптивні колонки */
+            gap: 20px;
+            margin-top: 30px;
+            margin-bottom: 30px;
+        }
+
+        .dashboard-card {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+            .dashboard-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            }
+
+            .dashboard-card h3 {
+                margin-top: 0;
+                color: #2c3e50;
+                font-size: 1.5rem;
+            }
+
+            .dashboard-card .count {
+                font-size: 2.5rem;
+                font-weight: bold;
+                color: #3498db;
+                margin: 10px 0;
+                display: block;
+            }
+
+            .dashboard-card .card-link {
+                display: inline-block;
+                margin-top: 15px;
+                padding: 10px 20px;
+                background-color: #3498db;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 500;
+                transition: background-color 0.2s;
+            }
+
+                .dashboard-card .card-link:hover {
+                    background-color: #2980b9;
+                }
+
+        .recent-activity {
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+            .recent-activity h3 {
+                margin-top: 0;
+            }
+
+            .recent-activity ul {
+                list-style: none;
+                padding: 0;
+            }
+
+            .recent-activity li {
+                padding: 8px 0;
+                border-bottom: 1px solid #eee;
+            }
+
+                .recent-activity li:last-child {
+                    border-bottom: none;
+                }
+
+            .recent-activity a {
+                text-decoration: none;
+                color: #2980b9;
+            }
+
+                .recent-activity a:hover {
+                    text-decoration: underline;
+                }
+
+        .welcome-section {
+            text-align: center;
+            padding: 20px;
+            background-color: #eaf2f8; /* Світлий фон для секції */
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+            .welcome-section p {
+                font-size: 1.1rem;
+                color: #5d6d7e;
+            }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo">
+                <a href="/index.html">TaskSystem</a>
+            </div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                    <li><a href="/taskattachments/index.html">Вкладення</a></li>
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="welcome-section">
+            <h1>Ласкаво просимо до TaskSystem!</h1>
+            <p>Ваш надійний помічник для керування завданнями та проєктами.</p>
+        </div>
+
+        <div id="messageContainer"></div> <div class="dashboard-grid">
+            <div class="dashboard-card">
+                <h3>Завдання</h3>
+                <span class="count" id="tasksCount">--</span>
+                <p>Загальна кількість завдань</p>
+                <a href="/tasks/index.html" class="card-link">Керувати Завданнями</a>
+            </div>
+            <div class="dashboard-card">
+                <h3>Користувачі</h3>
+                <span class="count" id="usersCount">--</span>
+                <p>Зареєстрованих користувачів</p>
+                <a href="/users/index.html" class="card-link">Керувати Користувачами</a>
+            </div>
+            <div class="dashboard-card">
+                <h3>Групи Завдань</h3>
+                <span class="count" id="taskGroupsCount">--</span>
+                <p>Створено груп завдань</p>
+                <a href="/taskgroups/index.html" class="card-link">Керувати Групами</a>
+            </div>
+            <div class="dashboard-card">
+                <h3>Швидке Створення</h3>
+                <p>Додати нове завдання або групу</p>
+                <a href="/tasks/index.html#taskForm" class="card-link" style="margin-right: 10px;">Нове Завдання</a>
+                <a href="/taskgroups/index.html#taskGroupForm" class="card-link">Нова Група</a>
+            </div>
+        </div>
+
+        <div class="recent-activity">
+            <h3>Остання активність (Останні завдання)</h3>
+            <ul id="recentTasksList">
+                <li>Завантаження...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script src="/js/common.js"></script>
+    <script>
+        // URL-и API для статистики (якщо вони є) або для отримання повних списків
+        const tasksApi = '/api/Tasks';
+        const usersApi = '/api/Users';
+        const taskGroupsApi = '/api/TaskGroups';
+
+        // DOM елементи для статистики
+        const tasksCountEl = document.getElementById('tasksCount');
+        const usersCountEl = document.getElementById('usersCount');
+        const taskGroupsCountEl = document.getElementById('taskGroupsCount');
+        const recentTasksListEl = document.getElementById('recentTasksList');
+
+        async function fetchDashboardData() {
+            try {
+                // Отримання кількості завдань
+                const tasksResponse = await fetch(tasksApi);
+                if (tasksResponse.ok) {
+                    const tasks = await tasksResponse.json();
+                    tasksCountEl.textContent = tasks.length; // Простий підрахунок на клієнті
+
+                    // Відображення останніх 5 завдань (сортування за ID desc як проксі для дати)
+                    const sortedTasks = tasks.sort((a, b) => b.id - a.id).slice(0, 5);
+                    recentTasksListEl.innerHTML = ''; // Очистити "Завантаження..."
+                    if (sortedTasks.length > 0) {
+                        sortedTasks.forEach(task => {
+                            const li = document.createElement('li');
+                            // Посилання на сторінку завдання (якщо є окрема сторінка для перегляду одного завдання)
+                            // Поки що посилання веде на загальну сторінку завдань
+                            li.innerHTML = `<a href="/tasks/index.html#task-${task.id}">${escapeHtml(task.description)}</a> (Статус: ${escapeHtml(task.status)})`;
+                            recentTasksListEl.appendChild(li);
+                        });
+                    } else {
+                        recentTasksListEl.innerHTML = '<li>Немає нещодавніх завдань.</li>';
+                    }
+
+                } else {
+                    tasksCountEl.textContent = 'Помилка';
+                    recentTasksListEl.innerHTML = '<li>Помилка завантаження завдань.</li>';
+                }
+            } catch (error) {
+                console.error("Error fetching tasks data:", error);
+                tasksCountEl.textContent = 'N/A';
+                recentTasksListEl.innerHTML = '<li>Помилка зв\'язку.</li>';
+            }
+
+            try {
+                // Отримання кількості користувачів
+                const usersResponse = await fetch(usersApi);
+                if (usersResponse.ok) {
+                    const users = await usersResponse.json();
+                    usersCountEl.textContent = users.length;
+                } else {
+                    usersCountEl.textContent = 'Помилка';
+                }
+            } catch (error) {
+                console.error("Error fetching users data:", error);
+                usersCountEl.textContent = 'N/A';
+            }
+
+            try {
+                // Отримання кількості груп завдань
+                const taskGroupsResponse = await fetch(taskGroupsApi);
+                if (taskGroupsResponse.ok) {
+                    const groups = await taskGroupsResponse.json();
+                    taskGroupsCountEl.textContent = groups.length;
+                } else {
+                    taskGroupsCountEl.textContent = 'Помилка';
+                }
+            } catch (error) {
+                console.error("Error fetching task groups data:", error);
+                taskGroupsCountEl.textContent = 'N/A';
+            }
+        }
+
+        // Ініціалізація сторінки
+        document.addEventListener('DOMContentLoaded', () => {
+            // Логіка для мобільного меню та активного посилання вже має бути в common.js
+            // Якщо ні, то її потрібно додати і сюди.
+
+            // Завантаження даних для дашборду
+            fetchDashboardData();
+        });
+    </script>
+</body>
+</html>

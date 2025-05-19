@@ -1,0 +1,339 @@
+﻿<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Керування Поданнями Завдань</title>
+    <link rel="stylesheet" href="../css/site.css">
+</head>
+<body>
+    <header>
+        <div class="header-container">
+            <div class="logo"><a href="/index.html">TaskSystem</a></div>
+            <nav class="main-nav">
+                <ul>
+                    <li><a href="/tasks/index.html">Завдання</a></li>
+                    <li><a href="/comments/index.html">Коментарі</a></li>
+                    <li><a href="/groupmembers/index.html">Члени Груп</a></li>
+                    <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
+                    <li><a href="/tasksubmissions/index.html">Подання</a></li>
+                    
+                    <li><a href="/users/index.html">Користувачі</a></li>
+                </ul>
+            </nav>
+            <button class="mobile-nav-toggle" aria-label="Toggle navigation" aria-expanded="false">
+                <span class="icon-bar"></span><span class="icon-bar"></span><span class="icon-bar"></span>
+            </button>
+        </div>
+    </header>
+
+    <div class="container">
+        <h1>Керування Поданнями Завдань</h1>
+        <div id="messageContainer"></div>
+
+        <form id="submissionForm">
+            <h3>Додати нове подання</h3>
+            <div>
+                <label for="subTaskIdSelect">Завдання:</label>
+                <select id="subTaskIdSelect" name="taskId" required>
+                    <option value="">Завантаження завдань...</option>
+                </select>
+            </div>
+            <div>
+                <label for="subUserIdSelect">Користувач (хто подає):</label>
+                <select id="subUserIdSelect" name="userId" required>
+                    <option value="">Завантаження користувачів...</option>
+                </select>
+            </div>
+            <div>
+                <label for="submissionText">Текст/вміст подання:</label>
+                <textarea id="submissionText" name="submission" rows="5" required></textarea>
+            </div>
+            <div>
+                <label for="subStatusSelect">Статус подання:</label>
+                <select id="subStatusSelect" name="status" required>
+                    <option value="">Виберіть статус...</option>
+                </select>
+            </div>
+            <div>
+                <label for="score">Оцінка (0-100, необов'язково):</label>
+                <input type="number" id="score" name="score" min="0" max="100">
+            </div>
+            <button type="submit">Додати Подання</button>
+        </form>
+
+        <div id="editSubmissionFormContainer" class="hidden">
+            <h3>Редагувати подання</h3>
+            <form id="editSubmissionForm">
+                <input type="hidden" id="editSubId">
+                <div>
+                    <label>Завдання:</label> <span id="editSubTaskDisplay"></span>
+                </div>
+                <div>
+                    <label>Користувач:</label> <span id="editSubUserDisplay"></span>
+                </div>
+                <div>
+                    <label for="editSubSubmissionText">Текст/вміст подання (можна не давати редагувати):</label>
+                    <textarea id="editSubSubmissionText" name="submission" rows="5" readonly></textarea>
+                </div>
+                <div>
+                    <label for="editSubStatusSelect">Статус подання:</label>
+                    <select id="editSubStatusSelect" name="status" required>
+                        <option value="">Виберіть статус...</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="editScore">Оцінка (0-100, необов'язково):</label>
+                    <input type="number" id="editScore" name="score" min="0" max="100">
+                </div>
+                <button type="submit">Зберегти Зміни</button>
+                <button type="button" id="cancelSubEditBtn" class="cancel-btn">Скасувати</button>
+            </form>
+        </div>
+
+        <h3>Список Подань</h3>
+        <div class="filter-container" style="margin-bottom: 1rem; display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem;">
+            <label for="filterSubTaskIdSelect">Фільтр за Завданням:</label>
+            <select id="filterSubTaskIdSelect" style="min-width: 180px;"><option value="">Всі завдання</option></select>
+            <label for="filterSubUserIdSelect" style="margin-left:10px;">Фільтр за Користувачем:</label>
+            <select id="filterSubUserIdSelect" style="min-width: 180px;"><option value="">Всі користувачі</option></select>
+            <button id="applySubFilterBtn" type="button" style="margin-left:10px;">Фільтрувати</button>
+            <button id="clearSubFilterBtn" type="button" class="cancel-btn">Очистити</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Завдання</th>
+                    <th>Користувач</th>
+                    <th>Подання</th>
+                    <th>Статус</th>
+                    <th>Оцінка</th>
+                    <th>Дата</th>
+                    <th>Дії</th>
+                </tr>
+            </thead>
+            <tbody id="submissionsTableBody"></tbody>
+        </table>
+    </div>
+
+    <script src="../js/common.js"></script>
+    <script>
+        const submissionsApiUrl = '/api/TaskSubmissions';
+        const tasksApiLookupUrl = '/api/Tasks/lookup';
+        const usersApiLookupUrl = '/api/Users/lookup';
+
+        const predefinedSubmissionStatuses = ["Подано", "Оцінено", "Прийнято", "Відхилено", "На доопрацюванні"];
+
+        // DOM Elements
+        const submissionForm = document.getElementById('submissionForm');
+        const subTaskIdSelect = document.getElementById('subTaskIdSelect');
+        const subUserIdSelect = document.getElementById('subUserIdSelect');
+        const submissionTextInput = document.getElementById('submissionText');
+        const subStatusSelect = document.getElementById('subStatusSelect');
+        const scoreInput = document.getElementById('score');
+
+        const editSubmissionFormContainer = document.getElementById('editSubmissionFormContainer');
+        const editSubmissionForm = document.getElementById('editSubmissionForm');
+        const editSubIdInput = document.getElementById('editSubId');
+        const editSubTaskDisplay = document.getElementById('editSubTaskDisplay');
+        const editSubUserDisplay = document.getElementById('editSubUserDisplay');
+        const editSubSubmissionTextInput = document.getElementById('editSubSubmissionText');
+        const editSubStatusSelect = document.getElementById('editSubStatusSelect');
+        const editScoreInput = document.getElementById('editScore');
+        const cancelSubEditBtn = document.getElementById('cancelSubEditBtn');
+
+        const submissionsTableBody = document.getElementById('submissionsTableBody');
+        const filterSubTaskIdSelect = document.getElementById('filterSubTaskIdSelect');
+        const filterSubUserIdSelect = document.getElementById('filterSubUserIdSelect');
+        const applySubFilterBtn = document.getElementById('applySubFilterBtn');
+        const clearSubFilterBtn = document.getElementById('clearSubFilterBtn');
+
+        function populateLocalSubmissionStatusSelect(selectElement) {
+            populateGenericSelect(selectElement, predefinedSubmissionStatuses.map(s => ({ value: s, text: s })), 'value', 'text', 'Виберіть статус...');
+        }
+
+        async function initializeDropdownsForSubmissions() {
+            await populateSelectWithOptions(subTaskIdSelect, tasksApiLookupUrl, 'id', 'description', 'Виберіть завдання...');
+            await populateSelectWithOptions(subUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
+            populateLocalSubmissionStatusSelect(subStatusSelect);
+
+            // Для форми редагування (статуси)
+            populateLocalSubmissionStatusSelect(editSubStatusSelect);
+
+            // Для фільтрів
+            await populateSelectWithOptions(filterSubTaskIdSelect, tasksApiLookupUrl, 'id', 'description', 'Всі завдання', true);
+            await populateSelectWithOptions(filterSubUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Всі користувачі', true);
+        }
+
+        async function fetchSubmissions() {
+            let url = submissionsApiUrl;
+            const params = new URLSearchParams();
+            const taskId = filterSubTaskIdSelect.value;
+            const userId = filterSubUserIdSelect.value;
+
+            if (taskId) params.append('taskId', taskId); // Використовуємо taskIdParam як на бекенді
+            if (userId) params.append('userId', userId); // Використовуємо userIdParam як на бекенді
+
+            const queryString = params.toString();
+            if (queryString) url += `?${queryString}`;
+
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const submissions = await response.json();
+                renderSubmissions(submissions);
+            } catch (error) {
+                console.error('Помилка завантаження подань:', error);
+                showMessage('messageContainer', `Помилка завантаження подань: ${error.message}`, 'error');
+                submissionsTableBody.innerHTML = `<tr><td colspan="8">Не вдалося завантажити дані. ${escapeHtml(error.message)}</td></tr>`;
+            }
+        }
+
+        function renderSubmissions(submissions) {
+            submissionsTableBody.innerHTML = '';
+            if (!submissions || submissions.length === 0) {
+                submissionsTableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">Подання не знайдено.</td></tr>';
+                return;
+            }
+            submissions.forEach(sub => {
+                const row = submissionsTableBody.insertRow();
+                const submittedAt = sub.submittedAt ? new Date(sub.submittedAt).toLocaleString('uk-UA') : 'N/A';
+                const scoreDisplay = sub.score !== null ? sub.score : '';
+                row.innerHTML = `
+                    <td>${sub.id}</td>
+                    <td>${escapeHtml(sub.taskDescription)} (ID: ${sub.taskId})</td>
+                    <td>${escapeHtml(sub.username)} (ID: ${sub.userId})</td>
+                    <td>${escapeHtml(sub.submission.substring(0,50))}...</td>
+                    <td>${escapeHtml(sub.status)}</td>
+                    <td>${scoreDisplay}</td>
+                    <td>${submittedAt}</td>
+                    <td>
+                        <button class="edit-btn" data-id="${sub.id}">Оцінити/Статус</button>
+                        <button class="delete-btn" data-id="${sub.id}">Видалити</button>
+                    </td>
+                `;
+            });
+        }
+
+        submissionForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const taskId = subTaskIdSelect.value;
+            const userId = subUserIdSelect.value;
+            const submissionText = submissionTextInput.value;
+            const status = subStatusSelect.value;
+            const scoreStr = scoreInput.value;
+
+            if (!taskId || !userId || !submissionText.trim() || !status) {
+                showMessage('messageContainer', 'Завдання, користувач, текст подання та статус є обов\'язковими.', 'error'); return;
+            }
+
+            const submissionData = {
+                taskId: parseInt(taskId), userId: parseInt(userId),
+                submission: submissionText, status: status,
+                score: scoreStr ? parseInt(scoreStr) : null
+            };
+
+            console.log('Спроба додати подання:', JSON.stringify(submissionData, null, 2));
+            try {
+                const response = await fetch(submissionsApiUrl, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(submissionData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Подання успішно додано!', 'success');
+                submissionForm.reset();
+                subTaskIdSelect.value = ""; subUserIdSelect.value = ""; subStatusSelect.value = "";
+                fetchSubmissions();
+            } catch (error) {
+                console.error('Помилка додавання подання:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        async function populateEditSubmissionForm(id) {
+            try {
+                const response = await fetch(`${submissionsApiUrl}/${id}`); // Запит на GET /api/TaskSubmissions/{id}
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                const sub = await response.json();
+
+                editSubIdInput.value = sub.id;
+                editSubTaskDisplay.textContent = `${escapeHtml(sub.taskDescription)} (ID: ${sub.taskId})`;
+                editSubUserDisplay.textContent = `${escapeHtml(sub.username)} (ID: ${sub.userId})`;
+                editSubSubmissionTextInput.value = sub.submission; // Можна зробити readonly
+                editSubStatusSelect.value = sub.status;
+                editScoreInput.value = sub.score !== null ? sub.score : '';
+
+                editSubmissionFormContainer.classList.remove('hidden');
+                editSubmissionFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (error) {
+                console.error('Помилка завантаження подання для редагування:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        }
+
+        editSubmissionForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+            const id = editSubIdInput.value;
+            const status = editSubStatusSelect.value;
+            const scoreStr = editScoreInput.value;
+            // Submission, TaskId, UserId не редагуються через цю форму (згідно з TaskSubmissionUpdateDto)
+            // const submissionText = editSubSubmissionTextInput.value;
+
+            if (!status) { showMessage('messageContainer', 'Статус є обов\'язковим.', 'error'); return; }
+
+            const updateData = {
+                status: status,
+                score: scoreStr ? parseInt(scoreStr) : null
+                // submission: submissionText // Якщо дозволяємо оновлення тексту подання
+            };
+            console.log(`Спроба оновити подання ID ${id}:`, JSON.stringify(updateData, null, 2));
+            try {
+                const response = await fetch(`${submissionsApiUrl}/${id}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updateData)
+                });
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
+                showMessage('messageContainer', 'Подання успішно оновлено!', 'success');
+                editSubmissionFormContainer.classList.add('hidden'); editSubmissionForm.reset();
+                fetchSubmissions();
+            } catch (error) {
+                console.error('Помилка оновлення подання:', error);
+                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+            }
+        });
+
+        cancelSubEditBtn.addEventListener('click', () => {
+            editSubmissionFormContainer.classList.add('hidden'); editSubmissionForm.reset();
+        });
+
+        submissionsTableBody.addEventListener('click', async (event) => {
+            const target = event.target;
+            if (target.classList.contains('delete-btn')) {
+                const id = target.dataset.id;
+                if (confirm(`Видалити подання ID: ${id}?`)) {
+                    try {
+                        const response = await fetch(`${submissionsApiUrl}/${id}`, { method: 'DELETE' });
+                        if (!response.ok) throw new Error(await handleApiResponseError(response));
+                        showMessage('messageContainer', 'Подання успішно видалено!', 'success');
+                        fetchSubmissions();
+                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                }
+            } else if (target.classList.contains('edit-btn')) {
+                const id = target.dataset.id;
+                populateEditSubmissionForm(id);
+            }
+        });
+
+        applySubFilterBtn.addEventListener('click', fetchSubmissions);
+        clearSubFilterBtn.addEventListener('click', () => {
+            filterSubTaskIdSelect.value = ''; filterSubUserIdSelect.value = '';
+            fetchSubmissions();
+        });
+
+        async function initializePage() {
+            await initializeDropdownsForSubmissions();
+            await fetchSubmissions();
+        }
+        initializePage();
+    </script>
+</body>
+</html>
