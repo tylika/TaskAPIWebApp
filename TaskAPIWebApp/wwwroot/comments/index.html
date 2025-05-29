@@ -19,7 +19,7 @@
                     <li><a href="/groupmembers/index.html">Члени Груп</a></li>
                     <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
                     <li><a href="/tasksubmissions/index.html">Подання</a></li>
-                   
+                    <li><a href="/taskattachments/index.html">Вкладення</a></li>
                     <li><a href="/users/index.html">Користувачі</a></li>
                 </ul>
             </nav>
@@ -42,8 +42,7 @@
                 <textarea id="content" name="content" required rows="4"></textarea>
             </div>
             <div>
-                <label for="userIdSelect">Автор (користувач):</label>
-                <select id="userIdSelect" name="userId" required>
+                <label for="userIdSelectForm">Автор (користувач):</label> <select id="userIdSelectForm" name="userId" required>
                     <option value="">Завантаження користувачів...</option>
                 </select>
             </div>
@@ -57,14 +56,12 @@
                 </div>
             </div>
             <div id="taskLinkContainer">
-                <label for="taskIdSelect">Завдання:</label>
-                <select id="taskIdSelect" name="taskId">
+                <label for="taskIdSelectForm">Завдання:</label> <select id="taskIdSelectForm" name="taskId">
                     <option value="">Завантаження завдань...</option>
                 </select>
             </div>
             <div id="taskSubmissionLinkContainer" class="hidden">
-                <label for="taskSubmissionIdSelect">Подання завдання:</label>
-                <select id="taskSubmissionIdSelect" name="taskSubmissionId">
+                <label for="taskSubmissionIdSelectForm">Подання завдання:</label> <select id="taskSubmissionIdSelectForm" name="taskSubmissionId">
                     <option value="">Завантаження подань...</option>
                 </select>
             </div>
@@ -83,7 +80,7 @@
                 <input type="hidden" id="editTaskIdHidden">
                 <input type="hidden" id="editTaskSubmissionIdHidden">
                 <button type="submit">Зберегти Зміни</button>
-                <button type="button" id="cancelEditBtn" class="cancel-btn">Скасувати</button>
+                <button type="button" id="cancelEditCommentBtn">Скасувати</button>
             </form>
         </div>
 
@@ -106,8 +103,8 @@
                     <th>ID</th>
                     <th>Коментар</th>
                     <th>Автор</th>
-                    <th>ID Завд.</th>
-                    <th>ID Подан.</th>
+                    <th>Прив'язано до Завдання</th>
+                    <th>Прив'язано до Подання</th>
                     <th>Створено</th>
                     <th>Дії</th>
                 </tr>
@@ -119,23 +116,17 @@
     <script src="../js/common.js"></script>
     <script>
         // Специфічний JS для сторінки comments/index.html
-
-        // URL-и API
         const commentsApiUrl = '/api/Comments';
-        // usersApiLookupUrl, tasksApiLookupUrl, taskSubmissionsApiLookupUrl - використовуються з common.js, якщо вони там визначені глобально,
-        // або їх можна визначити тут, якщо вони потрібні тільки цій сторінці для populateSelectWithOptions.
-        // Для наочності я їх тут залишу, але якщо вони в common.js, їх можна прибрати звідси.
-        const usersApiLookupUrl = '/api/Users/lookup';
-        const tasksApiLookupUrl = '/api/Tasks/lookup';
-        const taskSubmissionsApiLookupUrl = '/api/TaskSubmissions/lookup';
-
+        const usersApiUrl = '/api/Users'; // Для завантаження списку користувачів
+        const tasksApiUrl = '/api/Tasks';   // Для завантаження списку завдань
+        const taskSubmissionsApiUrl = '/api/TaskSubmissions'; // Для завантаження списку подань
 
         // DOM Елементи
         const commentForm = document.getElementById('commentForm');
         const contentInput = document.getElementById('content');
-        const userIdSelect = document.getElementById('userIdSelect');
-        const taskIdSelect = document.getElementById('taskIdSelect');
-        const taskSubmissionIdSelect = document.getElementById('taskSubmissionIdSelect');
+        const userIdSelectForm = document.getElementById('userIdSelectForm'); // Оновлений ID
+        const taskIdSelectForm = document.getElementById('taskIdSelectForm'); // Оновлений ID
+        const taskSubmissionIdSelectForm = document.getElementById('taskSubmissionIdSelectForm'); // Оновлений ID
         const linkToTaskRadio = document.getElementById('linkToTask');
         const linkToSubmissionRadio = document.getElementById('linkToSubmission');
         const taskLinkContainer = document.getElementById('taskLinkContainer');
@@ -145,41 +136,42 @@
         const editCommentFormContainer = document.getElementById('editCommentFormContainer');
         const editCommentIdInput = document.getElementById('editCommentId');
         const editContentInput = document.getElementById('editContent');
-        const editUserIdHidden = document.getElementById('editUserIdHidden');
-        const editTaskIdHidden = document.getElementById('editTaskIdHidden');
-        const editTaskSubmissionIdHidden = document.getElementById('editTaskSubmissionIdHidden');
+        const editUserIdHidden = document.getElementById('editUserIdHidden'); // Для збереження UserId при редагуванні
+        const editTaskIdHidden = document.getElementById('editTaskIdHidden'); // Для збереження TaskId при редагуванні
+        const editTaskSubmissionIdHidden = document.getElementById('editTaskSubmissionIdHidden'); // Для збереження TaskSubmissionId
 
-        const cancelEditBtn = document.getElementById('cancelEditBtn');
+        const cancelEditCommentBtn = document.getElementById('cancelEditCommentBtn'); // Оновлений ID
         const commentsTableBody = document.getElementById('commentsTableBody');
-        // messageContainer визначається і використовується через common.js (якщо showMessage там модифікована)
-        // або може бути отриманий тут: const messageContainer = document.getElementById('messageContainer');
 
         const filterTaskIdSelect = document.getElementById('filterTaskIdSelect');
         const filterTaskSubmissionIdSelect = document.getElementById('filterTaskSubmissionIdSelect');
         const applyFilterBtn = document.getElementById('applyFilterBtn');
         const clearFilterBtn = document.getElementById('clearFilterBtn');
 
-        // Функції, специфічні для цієї сторінки або які використовують глобальні функції з common.js
-
         function toggleLinkTypeFields() {
             if (linkToTaskRadio.checked) {
                 taskLinkContainer.classList.remove('hidden');
                 taskSubmissionLinkContainer.classList.add('hidden');
-                if (taskSubmissionIdSelect) taskSubmissionIdSelect.value = "";
+                if (taskSubmissionIdSelectForm) taskSubmissionIdSelectForm.value = ""; // Очищаємо інший селект
             } else {
                 taskLinkContainer.classList.add('hidden');
                 taskSubmissionLinkContainer.classList.remove('hidden');
-                if (taskIdSelect) taskIdSelect.value = "";
+                if (taskIdSelectForm) taskIdSelectForm.value = ""; // Очищаємо інший селект
             }
         }
 
         async function initializeDropdownsForComments() {
-            await populateSelectWithOptions(userIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть автора...');
-            await populateSelectWithOptions(taskIdSelect, tasksApiLookupUrl, 'id', 'description', 'Виберіть завдання...');
-            await populateSelectWithOptions(taskSubmissionIdSelect, taskSubmissionsApiLookupUrl, 'id', 'displayText', 'Виберіть подання...');
+            // Для форми створення
+            await populateSelectWithOptions(userIdSelectForm, usersApiUrl, 'id', 'username', 'Виберіть автора...');
+            await populateSelectWithOptions(taskIdSelectForm, tasksApiUrl, 'id', 'description', 'Виберіть завдання...'); // Припускаємо, що Tasks API повертає description
+            // Для TaskSubmissions, API має повертати якесь текстове представлення, наприклад, "Подання №X від User Y"
+            // Якщо ваш TaskSubmissions API повертає, наприклад, поле 'submissionSummary'
+            await populateSelectWithOptions(taskSubmissionIdSelectForm, taskSubmissionsApiUrl, 'id', 'submissionSummary', 'Виберіть подання...');
 
-            await populateSelectWithOptions(filterTaskIdSelect, tasksApiLookupUrl, 'id', 'description', 'Всі завдання', true);
-            await populateSelectWithOptions(filterTaskSubmissionIdSelect, taskSubmissionsApiLookupUrl, 'id', 'displayText', 'Всі подання', true);
+
+            // Для фільтрів
+            await populateSelectWithOptions(filterTaskIdSelect, tasksApiUrl, 'id', 'description', 'Всі завдання', true);
+            await populateSelectWithOptions(filterTaskSubmissionIdSelect, taskSubmissionsApiUrl, 'id', 'submissionSummary', 'Всі подання', true);
 
             toggleLinkTypeFields();
         }
@@ -187,24 +179,25 @@
         async function fetchComments() {
             let url = commentsApiUrl;
             const params = new URLSearchParams();
-            const taskId = filterTaskIdSelect.value;
-            const taskSubmissionId = filterTaskSubmissionIdSelect.value;
+            const selectedTaskId = filterTaskIdSelect.value;
+            const selectedTaskSubmissionId = filterTaskSubmissionIdSelect.value;
 
-            if (taskId) params.append('taskId', taskId);
-            if (taskSubmissionId) params.append('taskSubmissionId', taskSubmissionId);
+            if (selectedTaskId) params.append('taskId', selectedTaskId);
+            if (selectedTaskSubmissionId) params.append('taskSubmissionId', selectedTaskSubmissionId);
 
             const queryString = params.toString();
             if (queryString) url += `?${queryString}`;
 
             try {
                 const response = await fetch(url);
-                if (!response.ok) throw new Error(await handleApiResponseError(response)); // common.js
+                if (!response.ok) throw new Error(await handleApiResponseError(response));
                 const comments = await response.json();
+                console.log("Коментарі, отримані з API:", comments); // ДЛЯ ДІАГНОСТИКИ
                 renderComments(comments);
             } catch (error) {
                 console.error('Помилка завантаження коментарів:', error);
-                showMessage('messageContainer', `Помилка завантаження коментарів: ${error.message}`, 'error'); // common.js
-                commentsTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Не вдалося завантажити коментарі. ${escapeHtml(error.message)}</td></tr>`; // common.js
+                showMessage('messageContainer', `Помилка завантаження коментарів: ${error.message}`, 'error');
+                commentsTableBody.innerHTML = `<tr><td colspan="7" style="text-align:center;">Не вдалося завантажити коментарі. ${escapeHtml(error.message)}</td></tr>`;
             }
         }
 
@@ -216,15 +209,19 @@
             }
             comments.forEach(comment => {
                 const row = commentsTableBody.insertRow();
-                const userName = comment.user ? escapeHtml(comment.user.username) : 'Невідомий'; // common.js
-                const createdAt = comment.createdAt ? new Date(comment.createdAt).toLocaleString('uk-UA') : 'N/A';
+                // Очікуємо поля: id, content, userUsername, taskDescription, submissionInfo, createdAt
+                const authorDisplay = comment.userUsername ? escapeHtml(comment.userUsername) : (comment.userId ? `User ID: ${comment.userId}` : 'N/A');
+                const taskDisplay = comment.taskDescription ? escapeHtml(comment.taskDescription) : (comment.taskId ? `Task ID: ${comment.taskId}` : '');
+                const submissionDisplay = comment.submissionInfo ? escapeHtml(comment.submissionInfo) : (comment.taskSubmissionId ? `Subm. ID: ${comment.taskSubmissionId}` : '');
+                const createdAtFormatted = comment.createdAt ? new Date(comment.createdAt).toLocaleString('uk-UA') : 'N/A';
+
                 row.innerHTML = `
                         <td>${comment.id}</td>
                         <td>${escapeHtml(comment.content)}</td>
-                        <td>${userName} (ID: ${comment.userId})</td>
-                        <td>${comment.taskId || ''}</td>
-                        <td>${comment.taskSubmissionId || ''}</td>
-                        <td>${createdAt}</td>
+                        <td>${authorDisplay}</td>
+                        <td>${taskDisplay}</td>
+                        <td>${submissionDisplay}</td>
+                        <td>${createdAtFormatted}</td>
                         <td>
                             <button class="edit-btn" data-id="${comment.id}">Редагувати</button>
                             <button class="delete-btn" data-id="${comment.id}">Видалити</button>
@@ -233,46 +230,46 @@
             });
         }
 
-        // Обробники подій
         linkToTaskRadio.addEventListener('change', toggleLinkTypeFields);
         linkToSubmissionRadio.addEventListener('change', toggleLinkTypeFields);
 
         commentForm.addEventListener('submit', async (event) => {
             event.preventDefault();
             const content = contentInput.value;
-            const userId = userIdSelect.value;
+            const userId = userIdSelectForm.value;
             let taskIdVal = null;
             let taskSubmissionIdVal = null;
 
             if (linkToTaskRadio.checked) {
-                taskIdVal = taskIdSelect.value;
+                taskIdVal = taskIdSelectForm.value;
                 if (!taskIdVal) { showMessage('messageContainer', 'Будь ласка, виберіть завдання.', 'error'); return; }
             } else {
-                taskSubmissionIdVal = taskSubmissionIdSelect.value;
+                taskSubmissionIdVal = taskSubmissionIdSelectForm.value;
                 if (!taskSubmissionIdVal) { showMessage('messageContainer', 'Будь ласка, виберіть подання.', 'error'); return; }
             }
             if (!userId) { showMessage('messageContainer', 'Будь ласка, виберіть автора.', 'error'); return; }
 
-            const commentData = {
+            const commentData = { // Має відповідати CommentInputDto
                 content: content, userId: parseInt(userId),
                 taskId: taskIdVal ? parseInt(taskIdVal) : null,
                 taskSubmissionId: taskSubmissionIdVal ? parseInt(taskSubmissionIdVal) : null
             };
 
-            console.log('Спроба додати коментар:', JSON.stringify(commentData, null, 2));
             try {
                 const response = await fetch(commentsApiUrl, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(commentData)
                 });
                 if (!response.ok) throw new Error(await handleApiResponseError(response));
+                // API має повертати створений коментар з усіма деталями для відображення
+                const createdComment = await response.json();
                 showMessage('messageContainer', 'Коментар успішно додано!', 'success');
                 commentForm.reset();
-                userIdSelect.value = ""; taskIdSelect.value = ""; taskSubmissionIdSelect.value = "";
+                userIdSelectForm.value = ""; taskIdSelectForm.value = ""; taskSubmissionIdSelectForm.value = "";
                 linkToTaskRadio.checked = true; toggleLinkTypeFields();
                 fetchComments();
             } catch (error) {
                 console.error('Помилка додавання коментаря:', error);
-                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+                showMessage('messageContainer', `Помилка додавання: ${error.message}`, 'error');
             }
         });
 
@@ -280,17 +277,22 @@
             try {
                 const response = await fetch(`${commentsApiUrl}/${id}`);
                 if (!response.ok) throw new Error(await handleApiResponseError(response));
-                const comment = await response.json();
+                const comment = await response.json(); // Очікуємо об'єкт з полями, як в renderComments
+
+                console.log("Коментар для редагування:", comment); // ДІАГНОСТИКА
+
                 editCommentIdInput.value = comment.id;
                 editContentInput.value = comment.content;
+                // Зберігаємо ID для відправки форми, оскільки вони не редагуються
                 editUserIdHidden.value = comment.userId;
                 editTaskIdHidden.value = comment.taskId || "";
                 editTaskSubmissionIdHidden.value = comment.taskSubmissionId || "";
+
                 editCommentFormContainer.classList.remove('hidden');
                 editCommentFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } catch (error) {
                 console.error('Помилка завантаження коментаря для редагування:', error);
-                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+                showMessage('messageContainer', `Помилка завантаження для редагування: ${error.message}`, 'error');
             }
         }
 
@@ -298,14 +300,17 @@
             event.preventDefault();
             const id = editCommentIdInput.value;
             const content = editContentInput.value;
-            const userId = parseInt(editUserIdHidden.value);
-            const taskId = editTaskIdHidden.value ? parseInt(editTaskIdHidden.value) : null;
-            const taskSubmissionId = editTaskSubmissionIdHidden.value ? parseInt(editTaskSubmissionIdHidden.value) : null;
+            // Для PUT, ми відправляємо назад тільки ті поля, які можна змінювати (content)
+            // та ідентифікатори, щоб бекенд міг знайти та перевірити коментар.
+            // Відповідно до вашого CommentsController, він очікує CommentInputDto.
             const commentData = {
-                id: parseInt(id), content: content, userId: userId,
-                taskId: taskId, taskSubmissionId: taskSubmissionId
+                // id: parseInt(id), // ID йде в URL, не в тілі для PUT згідно з REST
+                content: content,
+                userId: parseInt(editUserIdHidden.value), // Потрібно для валідації на бекенді
+                taskId: editTaskIdHidden.value ? parseInt(editTaskIdHidden.value) : null,
+                taskSubmissionId: editTaskSubmissionIdHidden.value ? parseInt(editTaskSubmissionIdHidden.value) : null
             };
-            console.log('Спроба оновити коментар:', JSON.stringify(commentData, null, 2));
+
             try {
                 const response = await fetch(`${commentsApiUrl}/${id}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(commentData)
@@ -317,14 +322,17 @@
                 fetchComments();
             } catch (error) {
                 console.error('Помилка оновлення коментаря:', error);
-                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
+                showMessage('messageContainer', `Помилка оновлення: ${error.message}`, 'error');
             }
         });
 
-        cancelEditBtn.addEventListener('click', () => {
-            editCommentFormContainer.classList.add('hidden');
-            editCommentForm.reset();
-        });
+        if (cancelEditCommentBtn) { // Перевірка наявності кнопки
+            cancelEditCommentBtn.addEventListener('click', () => {
+                editCommentFormContainer.classList.add('hidden');
+                editCommentForm.reset();
+            });
+        }
+
 
         commentsTableBody.addEventListener('click', async (event) => {
             const target = event.target;
@@ -336,7 +344,10 @@
                         if (!response.ok) throw new Error(await handleApiResponseError(response));
                         showMessage('messageContainer', 'Коментар успішно видалено!', 'success');
                         fetchComments();
-                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+                    } catch (error) {
+                        showMessage('messageContainer', `Помилка видалення: ${error.message}`, 'error');
+                        console.error('Помилка видалення коментаря:', error);
+                    }
                 }
             } else if (target.classList.contains('edit-btn')) {
                 const id = target.dataset.id;
@@ -352,11 +363,10 @@
         });
 
         async function initializePage() {
-            await initializeDropdownsForComments(); // Змінена назва функції для уникнення конфліктів
+            await initializeDropdownsForComments();
             await fetchComments();
         }
 
-        // Ініціалізація сторінки
         initializePage();
     </script>
 </body>

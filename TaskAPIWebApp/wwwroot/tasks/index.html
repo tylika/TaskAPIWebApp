@@ -19,7 +19,7 @@
                     <li><a href="/groupmembers/index.html">Члени Груп</a></li>
                     <li><a href="/taskgroups/index.html">Групи Завдань</a></li>
                     <li><a href="/tasksubmissions/index.html">Подання</a></li>
-                    
+                    <li><a href="/taskattachments/index.html">Вкладення</a></li>
                     <li><a href="/users/index.html">Користувачі</a></li>
                 </ul>
             </nav>
@@ -104,8 +104,8 @@
                     <th>ID</th>
                     <th>Опис</th>
                     <th>Статус</th>
-                    <th>ID Користувача</th>
-                    <th>ID Групи</th>
+                    <th>Користувач</th>
+                    <th>Група</th>
                     <th>Дії</th>
                 </tr>
             </thead>
@@ -113,194 +113,382 @@
         </table>
     </div>
 
-    <script src="../js/common.js"></script>
     <script>
-        // Специфічний JS для сторінки tasks/index.html
-        const tasksApiUrl = '/api/Tasks';
-        const usersApiLookupUrl = '/api/Users/lookup';
-        const taskGroupsApiLookupUrl = '/api/TaskGroups/lookup';
-        const predefinedStatuses = ["Нове", "В роботі", "Виконано", "Відкладено", "Скасовано", "Чернетка"];
-
-        // DOM Елементи
-        const taskForm = document.getElementById('taskForm');
-        const descriptionInput = document.getElementById('description');
-        const statusSelect = document.getElementById('statusSelect');
-        const userIdSelect = document.getElementById('userIdSelect');
-        const taskGroupIdSelect = document.getElementById('taskGroupIdSelect');
-
-        const editTaskForm = document.getElementById('editTaskForm');
-        const editTaskFormContainer = document.getElementById('editTaskFormContainer');
-        const editTaskIdInput = document.getElementById('editTaskId');
-        const editDescriptionInput = document.getElementById('editDescription');
-        const editStatusSelect = document.getElementById('editStatusSelect');
-        const editUserIdSelect = document.getElementById('editUserIdSelect');
-        const editTaskGroupIdSelect = document.getElementById('editTaskGroupIdSelect');
-
-        const cancelEditBtn = document.getElementById('cancelEditBtn');
-        const tasksTableBody = document.getElementById('tasksTableBody');
-
-        const statusFilterInput = document.getElementById('statusFilterInput'); // Оновлений ID
-        const applyStatusFilterBtn = document.getElementById('applyStatusFilterBtn'); // Оновлений ID
-        const clearStatusFilterBtn = document.getElementById('clearStatusFilterBtn'); // Оновлений ID
-
-        function populateLocalStatusSelect(selectElement) { // Локальна, якщо predefinedStatuses тут
-            populateGenericSelect(selectElement, predefinedStatuses.map(s => ({ value: s, text: s })), 'value', 'text', 'Виберіть статус...');
-        }
-
-        async function initializeDropdownsForTasks() {
-            populateLocalStatusSelect(statusSelect);
-            populateLocalStatusSelect(editStatusSelect);
-            await populateSelectWithOptions(userIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
-            await populateSelectWithOptions(taskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Без групи');
-            await populateSelectWithOptions(editUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
-            await populateSelectWithOptions(editTaskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Без групи');
-        }
-
-        async function fetchTasks(statusQuery = null) {
-            let url = tasksApiUrl;
-            if (statusQuery && statusQuery.trim() !== '') {
-                url += `?status=${encodeURIComponent(statusQuery.trim())}`;
-            }
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error(await handleApiResponseError(response));
-                const tasks = await response.json();
-                renderTasks(tasks);
-            } catch (error) {
-                console.error('Помилка завантаження завдань:', error);
-                showMessage('messageContainer', `Помилка завантаження завдань: ${error.message}`, 'error');
-                tasksTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Не вдалося завантажити завдання. ${escapeHtml(error.message)}</td></tr>`;
-            }
-        }
-
-        function renderTasks(tasks) {
-            tasksTableBody.innerHTML = '';
-            if (!tasks || tasks.length === 0) {
-                tasksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Завдання не знайдено.</td></tr>';
+        // --- Початок коду, що був би в common.js ---
+        function showMessage(containerId, text, type = 'success') {
+            const messageContainer = document.getElementById(containerId);
+            if (!messageContainer) {
+                console.error(`Message container with id '${containerId}' not found.`);
                 return;
             }
-            tasks.forEach(task => {
-                const row = tasksTableBody.insertRow();
-                row.innerHTML = `
-                        <td>${task.id}</td><td>${escapeHtml(task.description)}</td><td>${escapeHtml(task.status)}</td>
-                        <td>${task.userId}</td><td>${task.taskGroupId !== null ? task.taskGroupId : ''}</td>
-                        <td>
-                            <button class="edit-btn" data-id="${task.id}">Редагувати</button>
-                            <button class="delete-btn" data-id="${task.id}">Видалити</button>
-                        </td>
-                    `;
-            });
-        }
-
-        taskForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const description = descriptionInput.value;
-            const status = statusSelect.value;
-            const userIdStr = userIdSelect.value;
-            const taskGroupIdStr = taskGroupIdSelect.value;
-
-            if (!status) { showMessage('messageContainer', 'Будь ласка, виберіть статус.', 'error'); return; }
-            if (!userIdStr) { showMessage('messageContainer', 'Будь ласка, виберіть користувача.', 'error'); return; }
-
-            const taskData = {
-                description: description, status: status, userId: parseInt(userIdStr),
-                taskGroupId: taskGroupIdStr ? parseInt(taskGroupIdStr) : null
-            };
-            console.log('Спроба додати завдання:', JSON.stringify(taskData, null, 2));
-            try {
-                const response = await fetch(tasksApiUrl, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData)
-                });
-                if (!response.ok) throw new Error(await handleApiResponseError(response));
-                showMessage('messageContainer', 'Завдання успішно додано!', 'success');
-                taskForm.reset(); statusSelect.value = ""; userIdSelect.value = ""; taskGroupIdSelect.value = "";
-                fetchTasks(statusFilterInput.value);
-            } catch (error) {
-                console.error('Помилка додавання завдання:', error);
-                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
-            }
-        });
-
-        async function populateEditTaskForm(id) { // Перейменовано populateEditForm
-            try {
-                const response = await fetch(`${tasksApiUrl}/${id}`);
-                if (!response.ok) throw new Error(await handleApiResponseError(response));
-                const task = await response.json();
-                editTaskIdInput.value = task.id;
-                editDescriptionInput.value = task.description;
-                editStatusSelect.value = task.status;
-                editUserIdSelect.value = task.userId;
-                editTaskGroupIdSelect.value = task.taskGroupId !== null ? task.taskGroupId : '';
-                editTaskFormContainer.classList.remove('hidden');
-                editTaskFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            } catch (error) {
-                console.error('Помилка завантаження завдання для редагування:', error);
-                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
-            }
-        }
-
-        editTaskForm.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            const id = editTaskIdInput.value;
-            const description = editDescriptionInput.value;
-            const status = editStatusSelect.value;
-            const userIdStr = editUserIdSelect.value;
-            const taskGroupIdStr = editTaskGroupIdSelect.value;
-
-            if (!status) { showMessage('messageContainer', 'Будь ласка, виберіть статус.', 'error'); return; }
-            if (!userIdStr) { showMessage('messageContainer', 'Будь ласка, виберіть користувача.', 'error'); return; }
-
-            const taskData = {
-                id: parseInt(id), description: description, status: status, userId: parseInt(userIdStr),
-                taskGroupId: taskGroupIdStr ? parseInt(taskGroupIdStr) : null
-            };
-            console.log('Спроба оновити завдання:', JSON.stringify(taskData, null, 2));
-            try {
-                const response = await fetch(`${tasksApiUrl}/${id}`, {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData)
-                });
-                if (!response.ok) throw new Error(await handleApiResponseError(response));
-                showMessage('messageContainer', 'Завдання успішно оновлено!', 'success');
-                editTaskFormContainer.classList.add('hidden'); editTaskForm.reset();
-                fetchTasks(statusFilterInput.value);
-            } catch (error) {
-                console.error('Помилка оновлення завдання:', error);
-                showMessage('messageContainer', `Помилка: ${error.message}`, 'error');
-            }
-        });
-
-        cancelEditBtn.addEventListener('click', () => {
-            editTaskFormContainer.classList.add('hidden'); editTaskForm.reset();
-        });
-
-        tasksTableBody.addEventListener('click', async (event) => {
-            const target = event.target;
-            if (target.classList.contains('delete-btn')) {
-                const id = target.dataset.id;
-                if (confirm(`Видалити завдання ID: ${id}?`)) {
-                    try {
-                        const response = await fetch(`${tasksApiUrl}/${id}`, { method: 'DELETE' });
-                        if (!response.ok) throw new Error(await handleApiResponseError(response));
-                        showMessage('messageContainer', 'Завдання успішно видалено!', 'success');
-                        fetchTasks(statusFilterInput.value);
-                    } catch (error) { showMessage('messageContainer', `Помилка: ${error.message}`, 'error'); }
+            messageContainer.innerHTML = '';
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${type}`;
+            messageDiv.textContent = text;
+            messageContainer.appendChild(messageDiv);
+            setTimeout(() => {
+                if (messageDiv.parentNode === messageContainer) {
+                    messageContainer.innerHTML = '';
                 }
-            } else if (target.classList.contains('edit-btn')) {
-                const id = target.dataset.id;
-                populateEditTaskForm(id); // Використовуємо перейменовану функцію
-            }
-        });
-
-        applyStatusFilterBtn.addEventListener('click', () => fetchTasks(statusFilterInput.value)); // Оновлений ID
-        clearStatusFilterBtn.addEventListener('click', () => { // Оновлений ID
-            statusFilterInput.value = ''; fetchTasks();
-        });
-
-        async function initializePage() {
-            await initializeDropdownsForTasks(); // Змінена назва функції
-            await fetchTasks();
+            }, 4000);
         }
-        initializePage();
+
+        function escapeHtml(unsafe) {
+            if (unsafe === null || typeof unsafe === 'undefined') {
+                return '';
+            }
+            return unsafe.toString()
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // ЗМІНЕНО: handleApiResponseError для уникнення "body stream already read"
+        async function handleApiResponseError(response) {
+            let errorMessage = `Помилка ${response.status}: ${response.statusText || 'Невідома помилка сервера'}`;
+            let errorDetailsForConsole = `Статус: ${response.status}, Текст статусу: ${response.statusText}`;
+
+            // Клонуємо відповідь, щоб можна було безпечно читати тіло кілька разів, якщо потрібно
+            // АЛЕ краще прочитати один раз і передати далі.
+            // Для простоти, спочатку спробуємо прочитати як текст.
+            const responseText = await response.text(); // Читаємо тіло ОДИН РАЗ
+
+            if (responseText) {
+                try {
+                    const errorData = JSON.parse(responseText); // Намагаємося розпарсити текст як JSON
+                    errorDetailsForConsole = errorData;
+
+                    if (errorData.message) {
+                        errorMessage = errorData.message;
+                    } else if (errorData.title && errorData.errors) {
+                        const details = Object.values(errorData.errors).flat().join('; ');
+                        errorMessage = `${errorData.title}${details ? ': ' + details : ''}`;
+                    } else if (response.status === 400 && errorData.errors) {
+                        const details = Object.keys(errorData.errors)
+                            .map(key => `${key}: ${errorData.errors[key].join(', ')}`)
+                            .join('; ');
+                        errorMessage = `Помилка валідації: ${details}`;
+                    } else if (typeof errorData === 'string' && errorData.length < 500) {
+                        errorMessage = errorData; // Якщо сам errorData - це рядок
+                    } else if (typeof errorData === 'object') {
+                        // Якщо це об'єкт, але не стандартний формат помилки, спробуємо його серіалізувати
+                        // або залишити загальне повідомлення, щоб уникнути [object Object]
+                        // errorMessage = JSON.stringify(errorData); // Може бути занадто детально для користувача
+                        // Залишимо errorMessage, як він був, але залогуємо errorData
+                        console.warn("Отримано неструктурований об'єкт помилки:", errorData);
+                    }
+                } catch (jsonError) {
+                    // Якщо не вдалося розпарсити як JSON, але текст є
+                    if (responseText.length > 0 && responseText.length < 1000 && !responseText.toLowerCase().includes("<html")) {
+                        errorMessage = escapeHtml(responseText);
+                    } else if (responseText.toLowerCase().includes("<html")) {
+                        errorMessage = `Помилка сервера (${response.status}). Перевірте консоль для деталей.`;
+                        console.error("Отримано HTML сторінку помилки від сервера:", responseText.substring(0, 1000) + "...");
+                    }
+                    errorDetailsForConsole = responseText;
+                    console.warn('Тіло відповіді не є валідним JSON або помилка при парсингу:', jsonError);
+                }
+            }
+
+            console.error("Деталі помилки від API:", errorDetailsForConsole); // Логуємо те, що отримали
+            return errorMessage;
+        }
+
+
+        function populateGenericSelect(selectElement, items, valueField, textField, defaultOptionText, addEmptyOptionAsDefault = true) {
+            if (!selectElement) {
+                return;
+            }
+            selectElement.innerHTML = '';
+            if (addEmptyOptionAsDefault) {
+                const defaultOpt = document.createElement('option');
+                defaultOpt.value = "";
+                defaultOpt.textContent = defaultOptionText;
+                selectElement.appendChild(defaultOpt);
+            }
+            if (items && Array.isArray(items)) {
+                items.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item[valueField];
+                    option.textContent = item[textField];
+                    selectElement.appendChild(option);
+                });
+            } else {
+                console.warn(`populateGenericSelect: items is not an array or is undefined for selectElement id: ${selectElement.id}`);
+            }
+        }
+
+        async function populateSelectWithOptions(selectElement, apiUrl, valueField, textField, defaultOptionText, isFilter = false) {
+            if (!selectElement) {
+                return;
+            }
+            const initialOptionText = isFilter ? defaultOptionText : "Завантаження...";
+            selectElement.innerHTML = `<option value="">${initialOptionText}</option>`;
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) { // Помилка HTTP
+                    const errorMsg = await handleApiResponseError(response.clone()); // Клонуємо, щоб оригінал можна було ще раз прочитати якщо треба
+                    throw new Error(errorMsg); // Кидаємо оброблене повідомлення
+                }
+                const items = await response.json();
+                populateGenericSelect(selectElement, items, valueField, textField, defaultOptionText, true);
+            } catch (error) { // Сюди потрапить і помилка мережі, і помилка з throw new Error вище
+                console.error(`Помилка завантаження для ${selectElement.id || 'селекта'} з ${apiUrl}: ${error.message}`);
+                selectElement.innerHTML = `<option value="">Помилка завантаження</option>`;
+                // Не показуємо повідомлення через showMessage тут, щоб не дублювати, якщо воно вже є в fetchTasks
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // ... (код для мобільної навігації та активного посилання, він не змінювався) ...
+            const mobileNavToggle = document.querySelector('.mobile-nav-toggle');
+            const mainNav = document.querySelector('.main-nav');
+
+            if (mobileNavToggle && mainNav) {
+                mobileNavToggle.addEventListener('click', () => {
+                    const isExpanded = mobileNavToggle.getAttribute('aria-expanded') === 'true' || false;
+                    mobileNavToggle.setAttribute('aria-expanded', !isExpanded);
+                    mainNav.classList.toggle('active');
+                });
+            }
+            try {
+                const currentPath = window.location.pathname;
+                const navLinks = document.querySelectorAll('.main-nav a');
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                    const linkHref = link.getAttribute('href');
+                    if (linkHref) {
+                        if (linkHref === currentPath || (linkHref === '/index.html' && currentPath === '/')) {
+                            link.classList.add('active');
+                        } else if (linkHref !== '/' && linkHref !== '/index.html' && currentPath.startsWith(linkHref.replace(/index\.html$/, ''))) {
+                            if (currentPath.startsWith(linkHref) || currentPath.startsWith(linkHref.substring(0, linkHref.lastIndexOf('/') + 1 || linkHref.length))) {
+                                link.classList.add('active');
+                            }
+                        }
+                    }
+                });
+                const activeLink = document.querySelector('.main-nav a.active');
+                if (!activeLink && (currentPath === '/' || currentPath === '/index.html')) {
+                    const homeLink = document.querySelector('.main-nav a[href="/index.html"], .main-nav a[href="/"]');
+                    if (homeLink) {
+                        homeLink.classList.add('active');
+                    }
+                }
+            } catch (e) {
+                console.error("Помилка підсвічування активного посилання:", e);
+            }
+
+            // --- Специфічний JS для сторінки tasks/index.html ---
+            // Переконайтеся, що ці URL правильні та API повертають очікувані дані
+            const tasksApiUrl = '/api/Tasks';
+            const usersApiLookupUrl = '/api/Users';
+            const taskGroupsApiLookupUrl = '/api/TaskGroups';
+            const predefinedStatuses = ["Нове", "В роботі", "Виконано", "Відкладено", "Скасовано", "Чернетка"];
+
+            const taskForm = document.getElementById('taskForm');
+            const descriptionInput = document.getElementById('description');
+            const statusSelect = document.getElementById('statusSelect');
+            const userIdSelect = document.getElementById('userIdSelect');
+            const taskGroupIdSelect = document.getElementById('taskGroupIdSelect');
+            const editTaskForm = document.getElementById('editTaskForm');
+            const editTaskFormContainer = document.getElementById('editTaskFormContainer');
+            const editTaskIdInput = document.getElementById('editTaskId');
+            const editDescriptionInput = document.getElementById('editDescription');
+            const editStatusSelect = document.getElementById('editStatusSelect');
+            const editUserIdSelect = document.getElementById('editUserIdSelect');
+            const editTaskGroupIdSelect = document.getElementById('editTaskGroupIdSelect');
+            const cancelEditBtn = document.getElementById('cancelEditBtn');
+            const tasksTableBody = document.getElementById('tasksTableBody');
+            const statusFilterInput = document.getElementById('statusFilterInput');
+            const applyStatusFilterBtn = document.getElementById('applyStatusFilterBtn');
+            const clearStatusFilterBtn = document.getElementById('clearStatusFilterBtn');
+
+            function populateLocalStatusSelect(selectElement) {
+                populateGenericSelect(selectElement, predefinedStatuses.map(s => ({ value: s, text: s })), 'value', 'text', 'Виберіть статус...');
+            }
+
+            async function initializeDropdownsForTasks() {
+                populateLocalStatusSelect(statusSelect);
+                populateLocalStatusSelect(editStatusSelect);
+                // Важливо: textField ('username', 'name') має відповідати тому, що повертає API
+                await populateSelectWithOptions(userIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
+                await populateSelectWithOptions(taskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Без групи');
+                await populateSelectWithOptions(editUserIdSelect, usersApiLookupUrl, 'id', 'username', 'Виберіть користувача...');
+                await populateSelectWithOptions(editTaskGroupIdSelect, taskGroupsApiLookupUrl, 'id', 'name', 'Без групи');
+            }
+
+            async function fetchTasks(statusQuery = null) {
+                let url = tasksApiUrl;
+                if (statusQuery && statusQuery.trim() !== '') {
+                    url += `?status=${encodeURIComponent(statusQuery.trim())}`;
+                }
+                try {
+                    const response = await fetch(url);
+                    if (!response.ok) { // Якщо відповідь не ОК (наприклад, 400, 404, 500)
+                        const errorMsg = await handleApiResponseError(response); // Отримуємо текст помилки
+                        throw new Error(errorMsg); // Кидаємо помилку з цим текстом
+                    }
+                    const tasks = await response.json();
+                    console.log("Завдання, отримані з API для рендерингу:", tasks); // ДЛЯ ДІАГНОСТИКИ
+                    renderTasks(tasks);
+                } catch (error) { // Цей catch тепер ловить і мережеві помилки, і помилки зі статусом не-ОК
+                    console.error('Помилка під час fetchTasks:', error);
+                    showMessage('messageContainer', `Помилка завантаження завдань: ${error.message}`, 'error');
+                    tasksTableBody.innerHTML = `<tr><td colspan="6" style="text-align:center;">Не вдалося завантажити завдання. ${escapeHtml(error.message)}</td></tr>`;
+                }
+            }
+
+            function renderTasks(tasks) {
+                tasksTableBody.innerHTML = '';
+                if (!tasks || tasks.length === 0) {
+                    tasksTableBody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Завдання не знайдено.</td></tr>';
+                    return;
+                }
+                tasks.forEach(task => {
+                    // ВАЖЛИВО: Перевірте, чи ваш API повертає поля 'userUsername' та 'taskGroupName'
+                    // Або використовуйте ті назви полів, які реально повертає ваш API
+                    const userDisplay = task.userUsername ? escapeHtml(task.userUsername) : (task.userId ? `ID: ${task.userId}` : 'N/A');
+                    const groupDisplay = task.taskGroupName ? escapeHtml(task.taskGroupName) : (task.taskGroupId ? `ID: ${task.taskGroupId}` : 'Без групи');
+
+                    const row = tasksTableBody.insertRow();
+                    row.innerHTML = `
+                            <td>${task.id}</td>
+                            <td>${escapeHtml(task.description)}</td>
+                            <td>${escapeHtml(task.status)}</td>
+                            <td>${userDisplay}</td>
+                            <td>${groupDisplay}</td>
+                            <td>
+                                <button class="edit-btn" data-id="${task.id}">Редагувати</button>
+                                <button class="delete-btn" data-id="${task.id}">Видалити</button>
+                            </td>
+                        `;
+                });
+            }
+
+            taskForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const description = descriptionInput.value;
+                const status = statusSelect.value;
+                const userIdStr = userIdSelect.value;
+                const taskGroupIdStr = taskGroupIdSelect.value;
+
+                if (!status) { showMessage('messageContainer', 'Будь ласка, виберіть статус.', 'error'); return; }
+                if (!userIdStr) { showMessage('messageContainer', 'Будь ласка, виберіть користувача.', 'error'); return; }
+
+                const taskData = {
+                    description: description, status: status, userId: parseInt(userIdStr),
+                    taskGroupId: taskGroupIdStr ? parseInt(taskGroupIdStr) : null
+                };
+
+                try {
+                    const response = await fetch(tasksApiUrl, {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData)
+                    });
+                    if (!response.ok) throw new Error(await handleApiResponseError(response));
+                    const createdTask = await response.json();
+                    showMessage('messageContainer', `Завдання "${escapeHtml(createdTask.description)}" успішно додано!`, 'success');
+                    taskForm.reset();
+                    statusSelect.value = ""; userIdSelect.value = ""; taskGroupIdSelect.value = "";
+                    fetchTasks(statusFilterInput.value);
+                } catch (error) {
+                    console.error('Помилка додавання завдання:', error);
+                    showMessage('messageContainer', `Помилка додавання: ${error.message}`, 'error');
+                }
+            });
+
+            async function populateEditTaskForm(id) {
+                try {
+                    const response = await fetch(`${tasksApiUrl}/${id}`);
+                    if (!response.ok) throw new Error(await handleApiResponseError(response));
+                    const task = await response.json();
+
+                    console.log("Дані завдання для редагування:", task);
+
+                    editTaskIdInput.value = task.id;
+                    editDescriptionInput.value = task.description;
+                    editStatusSelect.value = task.status;
+                    // Переконайтеся, що API повертає task.userId та task.taskGroupId
+                    editUserIdSelect.value = task.userId;
+                    editTaskGroupIdSelect.value = task.taskGroupId !== null ? task.taskGroupId : '';
+
+                    editTaskFormContainer.classList.remove('hidden');
+                    editTaskFormContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                } catch (error) {
+                    console.error('Помилка завантаження завдання для редагування:', error);
+                    showMessage('messageContainer', `Помилка завантаження для редагування: ${error.message}`, 'error');
+                }
+            }
+
+            editTaskForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const id = editTaskIdInput.value;
+                // ... (решта коду для оновлення, аналогічно до створення)
+                const description = editDescriptionInput.value;
+                const status = editStatusSelect.value;
+                const userIdStr = editUserIdSelect.value;
+                const taskGroupIdStr = editTaskGroupIdSelect.value;
+
+                if (!status) { showMessage('messageContainer', 'Будь ласка, виберіть статус.', 'error'); return; }
+                if (!userIdStr) { showMessage('messageContainer', 'Будь ласка, виберіть користувача.', 'error'); return; }
+
+                const taskData = {
+                    id: parseInt(id),
+                    description: description, status: status, userId: parseInt(userIdStr),
+                    taskGroupId: taskGroupIdStr ? parseInt(taskGroupIdStr) : null
+                };
+
+                try {
+                    const response = await fetch(`${tasksApiUrl}/${id}`, {
+                        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(taskData)
+                    });
+                    if (!response.ok) throw new Error(await handleApiResponseError(response));
+                    showMessage('messageContainer', 'Завдання успішно оновлено!', 'success');
+                    editTaskFormContainer.classList.add('hidden'); editTaskForm.reset();
+                    fetchTasks(statusFilterInput.value);
+                } catch (error) {
+                    console.error('Помилка оновлення завдання:', error);
+                    showMessage('messageContainer', `Помилка оновлення: ${error.message}`, 'error');
+                }
+            });
+
+            cancelEditBtn.addEventListener('click', () => {
+                editTaskFormContainer.classList.add('hidden'); editTaskForm.reset();
+            });
+
+            tasksTableBody.addEventListener('click', async (event) => {
+                const target = event.target;
+                if (target.classList.contains('delete-btn')) {
+                    const id = target.dataset.id;
+                    if (confirm(`Видалити завдання ID: ${id}?`)) {
+                        try {
+                            const response = await fetch(`${tasksApiUrl}/${id}`, { method: 'DELETE' });
+                            if (!response.ok) throw new Error(await handleApiResponseError(response));
+                            showMessage('messageContainer', 'Завдання успішно видалено!', 'success');
+                            fetchTasks(statusFilterInput.value);
+                        } catch (error) {
+                            showMessage('messageContainer', `Помилка видалення: ${error.message}`, 'error');
+                            console.error('Помилка видалення завдання:', error);
+                        }
+                    }
+                } else if (target.classList.contains('edit-btn')) {
+                    const id = target.dataset.id;
+                    populateEditTaskForm(id);
+                }
+            });
+
+            applyStatusFilterBtn.addEventListener('click', () => fetchTasks(statusFilterInput.value));
+            clearStatusFilterBtn.addEventListener('click', () => {
+                statusFilterInput.value = ''; fetchTasks();
+            });
+
+            async function initializePage() {
+                await initializeDropdownsForTasks();
+                await fetchTasks();
+            }
+            initializePage();
+        }); // Кінець DOMContentLoaded для специфічного JS сторінки
     </script>
 </body>
 </html>

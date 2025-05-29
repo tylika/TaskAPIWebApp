@@ -1,8 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-public class GroupMemberUpdateRoleDto
+namespace TaskAPIWebApp.Models // Або TaskAPIWebApp.DTOs
 {
-    [Required(ErrorMessage = "Роль є обов'язковою.")]
-    [StringLength(50, ErrorMessage = "Роль не може перевищувати 50 символів.")]
-    public string Role { get; set; }
+    public class GroupMemberUpdateRoleDto
+    {
+        [Required(ErrorMessage = "Нова роль є обов'язковою.")]
+        [StringLength(50, MinimumLength = 3, ErrorMessage = "Роль повинна містити від 3 до 50 символів.")]
+        // Аналогічно до GroupMemberInputDto, можна додати більш строгу валідацію ролей
+        // [AllowedRoles("Admin", "Member", "Viewer", ErrorMessage = "Вказана роль не підтримується.")]
+        public string Role { get; set; } = null!; // null!, оскільки [Required] гарантує, що значення буде надано
+    }
 }
